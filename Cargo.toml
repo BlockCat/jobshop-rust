@@ -5,3 +5,4 @@ authors = ["Zino Onomiwo <zinoonomiwo@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+dot = "0.1.4"

@@ -9,6 +9,8 @@ use crate::schedule::Schedule;
 mod greedy;
 mod graph;
 
+pub use graph::DisjunctiveGraph;
+
 pub trait ProblemSolver {
     fn solve() -> Schedule;
 }
