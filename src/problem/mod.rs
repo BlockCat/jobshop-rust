@@ -6,6 +6,9 @@ use std::cell::RefCell;
 
 use crate::schedule::Schedule;
 
+mod greedy;
+mod graph;
+
 pub trait ProblemSolver {
     fn solve() -> Schedule;
 }
@@ -22,8 +25,8 @@ pub struct Job(Vec<Rc<Activity>>);
 
 #[derive(Debug)]
 pub struct Activity {
-    process_time: u32,
-    machine_id: u32,
+    pub process_time: u32,
+    pub machine_id: u32,
     precedences: RefCell<Vec<Weak<Activity>>>,    
 }
 
