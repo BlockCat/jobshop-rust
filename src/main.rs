@@ -7,7 +7,7 @@ use std::fs::File;
 fn main() {
     println!("Hello");
 
-    let path = "bench_la01.txt";
+    let path = "bench_test.txt";
 
     let problem = Problem::read(path).unwrap();
     let graph = DisjunctiveGraph::from(&problem);

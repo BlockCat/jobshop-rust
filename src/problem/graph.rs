@@ -28,10 +28,11 @@ impl From<&Problem> for DisjunctiveGraph {
 
 		// Create a node for every activity, still grouped by job and in order
 		let mut counter = 0;
-		let mut jobs = problem.jobs.iter().enumerate()
+		let mut jobs: Vec<Vec<Node>> = problem.jobs.iter().enumerate()
 			.map(|(job_id, activities)| {
 				// For every activity create a node
-				activities.0.iter()                    
+				activities.iter()                    
+					.map(|id| &problem.activities[*id])
 					.map(|activity| {
 						let id = counter;
 						counter += 1;
@@ -71,7 +72,21 @@ impl From<&Problem> for DisjunctiveGraph {
 		let mut nodes: Vec<Node> = jobs.into_iter().flatten().collect();
 
 		// Search for activities on other jobs with the same machine.
-		for activities in mapping.values() {
+		for activities in mapping.values() {			
+			for (i, (job_1, ac1)) in (0..(activities.len() - 1)).map(|x| (x, activities[x])) {
+				let others = ((i+1)..activities.len())
+					.map(|x| activities[x])
+					.filter(|(_,   ac2)| &ac1 != ac2 ) // Different activity
+					.filter(|(job_2, _)| &job_1 != job_2); // Different job
+
+				for (_, ac2) in others {
+					nodes[ac1].disjunctions.insert(ac2);
+					nodes[ac2].disjunctions.insert(ac1);	
+				}
+			}
+		}
+
+		/*for activities in mapping.values() {
 			for i in 0..(activities.len() - 1) {
 				let (job_1, ac1) = activities[i];
 				for j in (i+1)..activities.len() {
@@ -82,7 +97,7 @@ impl From<&Problem> for DisjunctiveGraph {
 					}
 				}
 			}
-		}
+		}*/
 
 		DisjunctiveGraph {
 			nodes
@@ -90,6 +105,34 @@ impl From<&Problem> for DisjunctiveGraph {
 	}
 }
 
+impl DisjunctiveGraph {
+
+	// Any node that does not have precedences
+	fn starting_nodes<'a> (&'a self) -> Vec<&'a Node> {
+		self.nodes.iter()
+			.filter(|x| x.predecessors.is_empty())
+			.collect()
+	}
+
+	fn ending_nodes(&self) -> Vec<&Node> {
+		self.nodes.iter()
+			.filter(|x| x.successors.is_empty())
+			.collect()
+	}
+
+	fn fix_disjunction<'a>(&'a self, a: &'a Node, b: &'a Node) -> Result<DisjunctiveGraph, String> {
+
+		if !a.disjunctions.contains(&b.id) || !b.disjunctions.contains(&a.id) {
+			Err("".to_owned())
+		} else {
+			let mut cloned = self.clone();
+			cloned.nodes[a.id].disjunctions.remove(&b.id);
+			cloned.nodes[b.id].disjunctions.remove(&a.id);
+
+			Ok(cloned)
+		}
+	}
+}
 
 type DotNode = usize;
 type DotEdge = (dot::ArrowShape, DotNode, DotNode);
@@ -152,31 +195,3 @@ impl<'a> dot::GraphWalk<'a, DotNode, DotEdge> for DisjunctiveGraph {
     fn target(&self, e: &DotEdge) -> DotNode { e.2 }
 }
 
-impl DisjunctiveGraph {
-
-	// Any node that does not have precedences
-	fn starting_nodes<'a> (&'a self) -> Vec<&'a Node> {
-		self.nodes.iter()
-			.filter(|x| x.predecessors.is_empty())
-			.collect()
-	}
-
-	fn ending_nodes(&self) -> Vec<&Node> {
-		self.nodes.iter()
-			.filter(|x| x.successors.is_empty())
-			.collect()
-	}
-
-	fn fix_disjunction<'a>(&'a self, a: &'a Node, b: &'a Node) -> Result<DisjunctiveGraph, String> {
-
-		if !a.disjunctions.contains(&b.id) || !b.disjunctions.contains(&a.id) {
-			Err("".to_owned())
-		} else {
-			let mut cloned = self.clone();
-			cloned.nodes[a.id].disjunctions.remove(&b.id);
-			cloned.nodes[b.id].disjunctions.remove(&a.id);
-
-			Ok(cloned)
-		}
-	}
-}

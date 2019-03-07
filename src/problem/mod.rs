@@ -1,8 +1,6 @@
 use std::io::{ BufRead, BufReader };
 use std::fs::File;
 use std::path::Path;
-use std::rc::{ Rc, Weak };
-use std::cell::RefCell;
 
 use crate::schedule::Schedule;
 
@@ -15,21 +13,20 @@ pub trait ProblemSolver {
     fn solve() -> Schedule;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Problem {
-    machines: u32,
-    jobs: Vec<Job>,
-    optimal: u32,
+    pub machines: u32,
+    pub activities: Vec<Activity>,
+    pub jobs: Vec<Vec<usize>>,
+    pub optimal: u32,
 }
 
-#[derive(Debug)]
-pub struct Job(Vec<Rc<Activity>>);
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Activity {
+    id: usize,
     pub process_time: u32,
     pub machine_id: u32,
-    precedences: RefCell<Vec<Weak<Activity>>>,    
+    precedences: Vec<usize>,    
 }
 
 // To be ran with: https://www.eii.uva.es/elena/JSSP/InstancesJSSP.htm
@@ -44,43 +41,45 @@ impl Problem {
         let machines = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Jobs is not a number")?;
         let optimal = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("No optimal given")?;
 
-        // Take jobs processing times
+        // Read activity processing times
         let processing_times = reader.by_ref()
             .take(jobs as usize)
-            .map(|x| x.split(" ").map(|x| x.parse::<u32>().unwrap()).collect::<Vec<_>>())
+            .map(|x| x.split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<_>>())
             .collect::<Vec<_>>().into_iter();
 
+        // Read activity machine placement
         let machine_placements = reader.by_ref()
             .take(jobs as usize)
-            .map(|x| x.split(" ").map(|x| x.parse::<u32>().unwrap()).collect::<Vec<_>>())
+            .map(|x| x.split(" ").map(|s| s.parse::<u32>().unwrap()).collect::<Vec<_>>())
             .collect::<Vec<_>>().into_iter();
-            
-        let jobs = processing_times.zip(machine_placements)
-            .map(|(p, m)| {
-                p.into_iter().zip(m.into_iter()).collect::<Vec<_>>()
-            })
-            .map(|activities| {
-                let mut activities = activities.into_iter().map(|x| Rc::new(Activity {
-                    process_time: x.0,
-                    machine_id: x.1,
-                    precedences: RefCell::default(),
-                })).collect::<Vec<_>>();
 
-
-                for k in 0..activities.len() {
-                    let precedences = activities.iter()
-                        .take(k)
-                        .map(|x| Rc::downgrade(x))
-                        .collect::<Vec<_>>();                    
-                    *activities[k].precedences.borrow_mut() = precedences;    
-                }                    
-                
-                Job(activities)
+        // Merge processing times and machine placements
+        let mut counter = 0usize;
+        let mut activities: Vec<Vec<Activity>> = processing_times.zip(machine_placements).map(|(p, m)| {
+                p.into_iter().zip(m).map(|(p, m)| {
+                    let id = counter;
+                    counter += 1;
+                    Activity {
+                        id: id,
+                        process_time: p,
+                        machine_id: m,
+                        precedences: Default::default()
+                    }
+                }).collect()
             }).collect();
-       
+        
+        for activities in &mut activities {
+            let start = activities[0].id;    
+            for i in 0..activities.len() {
+                activities[i].precedences = (start..(start+i)).collect();
+            }
+        }
+
+        let jobs = activities.iter().map(|x| x.iter().map(|x| x.id).collect()).collect();
+        let activities = activities.into_iter().flatten().collect();
 
         Ok(Problem {
-            machines, jobs, optimal
+            machines, activities, jobs, optimal,
         })
     }
 }
