@@ -6,7 +6,8 @@ use crate::problem::Problem;
 // No edges should be added after creation.
 // Disjunctions can be fixed, this will return a new instance of the graph.
 // Would be nice if two nodes could reference the same edge, then a change in the edge would result in a change in the nodes.
-
+// Switch to:
+// https://ac.els-cdn.com/S0377221799004865/1-s2.0-S0377221799004865-main.pdf?_tid=b48d4410-024d-4d81-9762-34e0b7b924a4&acdnat=1552055948_805fca074e1e30d2c269cbf795004fd4
 #[derive(Debug, Clone)]
 pub struct DisjunctiveGraph {
 	nodes: Vec<Node>
