@@ -21,12 +21,12 @@ pub struct Problem {
     pub optimal: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Activity {
-    id: usize,
+    pub id: usize,
     pub process_time: u32,
     pub machine_id: u32,
-    precedences: Vec<usize>,    
+    pub precedences: Vec<usize>,    
 }
 
 // To be ran with: https://www.eii.uva.es/elena/JSSP/InstancesJSSP.htm
