@@ -2,26 +2,9 @@
 use jobshop::problem::*;
 use std::fs::File;
 
-enum Relation {
-    Successor,
-    Predecessor,
-    Disjunctive,
-    Unknown
-}
-
-struct RelationShip {
-    relation: Relation,
-    prev: u16,
-    next: u16
-}
 
 fn main() {
     println!("Hello");
-
-
-    println!("Container: {}", std::mem::size_of::<Relation>());
-    println!("Success: {}", std::mem::size_of::<RelationShip>());
-    println!("i32: {}, u32: {}", std::mem::size_of::<i32>(), std::mem::size_of::<u32>());
 
     let path = "bench_test.txt";
 
