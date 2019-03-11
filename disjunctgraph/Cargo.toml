@@ -1,0 +1,12 @@
+[package]
+name = "disjunctgraph"
+version = "0.1.0"
+authors = ["Zino Onomiwo <zinoonomiwo@gmail.com>"]
+edition = "2018"
+
+[features]
+default = ["labeller"]
+labeller = ["dot"]
+
+[dependencies]
+dot = { version = "0.1.4", optional = true }

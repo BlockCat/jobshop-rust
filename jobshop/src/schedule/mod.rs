@@ -1,8 +1,4 @@
-
-use std::collections::HashSet;
-
-
-use crate::problem::{ Activity, Problem };
+use crate::problem::{ Activity, Problem, ProblemNode };
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScheduledActivity {    
@@ -27,6 +23,14 @@ impl Schedule {
     }
 }
 
+impl<T: disjunctgraph::Graph<ProblemNode>> From<T> for Schedule {
+
+    fn from(graph: T) -> Schedule {
+        unimplemented!()
+    }
+}
+
+
 impl From<OrderedActivities> for Schedule {
     fn from(ordered_activities: OrderedActivities) -> Schedule {
         
@@ -37,7 +41,7 @@ impl From<OrderedActivities> for Schedule {
             processing_time: u32,
             precedences: Vec<usize>
         }
-        fn si (index: usize, activity_times: &mut Vec<Option<u32>>, precedences: &Vec<ActivityOption>) -> u32 {            
+        fn si (index: usize, activity_times: &mut Vec<Option<u32>>, precedences: &[ActivityOption]) -> u32 {            
             match activity_times[index] {
                 Some(e) => e,
                 None => {

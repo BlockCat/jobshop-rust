@@ -4,13 +4,12 @@ use std::path::Path;
 
 use crate::schedule::Schedule;
 
-mod greedy;
 mod graph;
 
 pub use graph::DisjunctiveGraph;
 
 pub trait ProblemSolver {
-    fn solve() -> Schedule;
+    fn solve(problem: &Problem) -> Schedule;
 }
 
 #[derive(Debug, Clone)]
@@ -82,4 +81,25 @@ impl Problem {
             machines, activities, jobs, optimal,
         })
     }
+}
+
+impl Into<disjunctgraph::MatrixGraph<ProblemNode>> for &Problem {
+
+    fn into(self) -> disjunctgraph::MatrixGraph<ProblemNode> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone)]
+pub struct ProblemNode {
+    id: usize,
+    weight: u32
+}
+
+impl disjunctgraph::NodeId for ProblemNode {
+    fn id(&self) -> usize { self.id }
+}
+
+impl disjunctgraph::NodeWeight for ProblemNode {
+    fn weight(&self) -> u32 { self.weight }
 }

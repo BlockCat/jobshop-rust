@@ -1,4 +1,5 @@
 use std::collections::{ HashSet, HashMap };
+use disjunctgraph::{ NodeId, NodeWeight, Graph, self};
 
 use crate::problem::Problem;
 
@@ -22,6 +23,48 @@ pub struct Node {
 	predecessors: HashSet<usize>,
 	successors: HashSet<usize>,
 	disjunctions: HashSet<usize>    
+}
+
+impl NodeId for Node {
+	fn id(&self) -> usize { self.id }
+}
+
+impl NodeWeight for Node {
+	fn weight(&self) -> u32 { self.processing_time }
+}
+
+impl Graph<Node> for DisjunctiveGraph {
+	fn nodes(&self) -> &[Node] {
+		&self.nodes
+	}
+
+	fn source(&self) -> &Node {
+		unimplemented!()
+	}
+
+	fn sink(&self) -> &Node {
+		unimplemented!()
+	}
+
+    fn successors(&self, id: &impl NodeId) -> Vec<&Node> {
+		unimplemented!()
+	}
+
+    fn predecessors(&self, id: &impl NodeId) -> Vec<&Node> {
+		unimplemented!()
+	}
+    fn disjunctions(&self, id: &impl NodeId) -> Vec<&Node> {
+		unimplemented!()
+	}
+    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+		unimplemented!()
+	}
+    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+		unimplemented!()
+	}
+    fn into_directed(&self) -> disjunctgraph::Result<Self> {
+		unimplemented!()
+	}
 }
 
 impl From<&Problem> for DisjunctiveGraph {
@@ -87,56 +130,15 @@ impl From<&Problem> for DisjunctiveGraph {
 			}
 		}
 
-		/*for activities in mapping.values() {
-			for i in 0..(activities.len() - 1) {
-				let (job_1, ac1) = activities[i];
-				for j in (i+1)..activities.len() {
-					let (job_2, ac2) = activities[j];
-					if job_1 != job_2 && ac1 != ac2 { // Different job and different activity
-						nodes[ac1].disjunctions.insert(ac2);
-						nodes[ac2].disjunctions.insert(ac1);						
-					}
-				}
-			}
-		}*/
-
 		DisjunctiveGraph {
 			nodes
 		}
 	}
 }
-
-impl DisjunctiveGraph {
-
-	// Any node that does not have precedences
-	fn starting_nodes<'a> (&'a self) -> Vec<&'a Node> {
-		self.nodes.iter()
-			.filter(|x| x.predecessors.is_empty())
-			.collect()
-	}
-
-	fn ending_nodes(&self) -> Vec<&Node> {
-		self.nodes.iter()
-			.filter(|x| x.successors.is_empty())
-			.collect()
-	}
-
-	fn fix_disjunction<'a>(&'a self, a: &'a Node, b: &'a Node) -> Result<DisjunctiveGraph, String> {
-
-		if !a.disjunctions.contains(&b.id) || !b.disjunctions.contains(&a.id) {
-			Err("".to_owned())
-		} else {
-			let mut cloned = self.clone();
-			cloned.nodes[a.id].disjunctions.remove(&b.id);
-			cloned.nodes[b.id].disjunctions.remove(&a.id);
-
-			Ok(cloned)
-		}
-	}
-}
-
+/*
 type DotNode = usize;
 type DotEdge = (dot::ArrowShape, DotNode, DotNode);
+
 impl<'a> dot::Labeller<'a, DotNode, DotEdge> for DisjunctiveGraph {
 	fn graph_id(&'a self) -> dot::Id<'a> {
 		dot::Id::new("G").unwrap()
@@ -161,38 +163,29 @@ impl<'a> dot::Labeller<'a, DotNode, DotEdge> for DisjunctiveGraph {
 
 impl<'a> dot::GraphWalk<'a, DotNode, DotEdge> for DisjunctiveGraph {
 
-	fn nodes(&self) -> dot::Nodes<'a, DotNode> {
-		self.nodes.iter().map(|x| x.id).collect()
-    }
+	fn nodes(&self) -> dot::Nodes<'a, DotNode> {		
+		self.nodes().iter().map(|x| x.id()).collect()
+	}
 
-    fn edges(&'a self) -> dot::Edges<'a, DotEdge> {
+	fn edges(&'a self) -> dot::Edges<'a, DotEdge> {
 		use dot::{ ArrowShape, Fill, Side };
-		let directed = ArrowShape::Normal(Fill::Filled, Side::Both);		
-		let directed = self.nodes.iter()
-			.flat_map(|x| {
-				x.successors.iter()
-					.map(move |s| (directed, x.id, *s))
-			});
-		
+		let directed = ArrowShape::Normal(Fill::Filled, Side::Both);
 		let undirected = ArrowShape::NoArrow;
-		let undirected = self.nodes.iter()
-			.flat_map(|x| {
-				x.disjunctions.iter()
-					.filter(move |s| s > &&x.id )
-					.map(move |s| (undirected, x.id, *s))
-			
-			});
 
-		let mut edges = Vec::with_capacity(self.nodes.len() * 2);
+		let successors = self.nodes()
+			.iter()
+			.flat_map(|x| self.successors(x).iter().map(|s| (x, s)))
+			.map(|(a, b)| (directed, a.id(), b.id()));
+		
+		let disjunctions = self.nodes()
+			.iter()
+			.flat_map(|x| self.disjunctions(x).iter().map(|s| (x, s)))
+			.filter(|(a, b)| b.id() > a.id())
+			.map(|(a, b)| (undirected, a.id(), b.id()));
 
-		edges.extend(directed);
-		edges.extend(undirected);
+		successors.chain(disjunctions).collect()		
+	}
 
-		std::borrow::Cow::Owned(edges)
-    }
-
-    fn source(&self, e: &DotEdge) -> DotNode { e.1 }
-
+	fn source(&self, e: &DotEdge) -> DotNode { e.1 }
     fn target(&self, e: &DotEdge) -> DotNode { e.2 }
-}
-
+}*/
