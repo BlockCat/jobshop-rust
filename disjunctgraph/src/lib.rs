@@ -7,7 +7,7 @@ pub use linked_graph::LinkedGraph;
 
 #[derive(Debug)]
 pub enum GraphError {
-    Cyclic
+    Cyclic, InvalidEdge
 }
 
 pub trait NodeId {
@@ -52,9 +52,35 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
     }
 
     fn force_critical_path(&self) -> Vec<&T> {
-        // Use dijkstras algorithm (modified)
+        use std::collections::VecDeque;
+        // Use shortest path algorithm (modified)
+        // with negative edges
+        let source = self.source().id();
+        let sink = self.sink().id();
 
-        unimplemented!()
+
+        let mut processed = vec!(0u32; self.nodes().len());
+        let mut backtracker = vec!(0usize; self.nodes().len());
+        let mut stack: VecDeque<usize> = VecDeque::new();
+        stack.push_back(source);
+
+        while !stack.is_empty() {
+            let current_node = stack.pop_front().unwrap();
+            let weight = self.nodes()[current_node].weight();
+
+            for successor in self.successors(&current_node) {
+                let successor = successor.id();
+                if processed[successor] <= processed[current_node] + weight {
+                    processed[successor] = processed[current_node] + weight;
+                    backtracker[successor] = current_node;
+                    stack.push_back(successor);
+                }
+            }
+        }
+
+        println!("Backtrack: {:?}", backtracker);
+        println!("Criticals: {:?}", processed);        
+        unimplemented!()        
     }
 
     fn is_cyclic(&self) -> bool {
@@ -63,19 +89,42 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
         let source = self.source();
 
         let mut processed = vec!(0u16; self.nodes().len());
+        let mut in_stack = vec!(false; self.nodes().len());
 
         // Create a topology ordering in O(V + E)
-        let mut stack: VecDeque<usize> = VecDeque::with_capacity(processed.len() / 4);
-        stack.push_back(source.id());
-        let mut counter = 0;
-        while !stack.is_empty() {            
-            let current_node = stack.pop_front().unwrap();
-            if processed[current_node] == 0 {
-                counter += 1;
-                processed[current_node] = counter;           
+        // postorder
+        // Without recursion:
+        // Add the node in the stack as visited, then add children.
+        // Once children are done the node will be visited again postorder action is taken.
+        // To prevent loops, the node will only be handled if it doesn't have a topology order and it's not in the stack.
 
-                // Add children
-                stack.extend(self.successors(&current_node).iter().map(|x| x.id()));   
+        enum Status { Visisted(usize), Unvisited(usize) };
+        let mut stack: VecDeque<Status> = VecDeque::with_capacity(processed.len() / 4);
+
+        stack.push_back(Status::Unvisited(source.id()));
+        let mut counter = 1;
+
+        while !stack.is_empty() {            
+            let current_node = stack.pop_back().unwrap();
+
+            match current_node {
+                Status::Unvisited(current_node) => {
+                    if processed[current_node] == 0 && !in_stack[current_node] {
+                        // I should go after the children, so add me first.
+                        stack.push_back(Status::Visisted(current_node));
+                        // Then add children, because stack
+                        stack.extend(self.successors(&current_node).iter().map(|x| Status::Unvisited(x.id())));
+
+                        in_stack[current_node] = true;
+                    }
+                },
+                Status::Visisted(current_node) => {
+                    if processed[current_node] == 0 {
+                        processed[current_node] = counter;                    
+                        in_stack[current_node] = false;
+                        counter += 1;
+                    }
+                }
             }
         }
 
@@ -89,7 +138,7 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
             for successor in self.successors(&node) {
                 let successor = successor.id();
 
-                if processed[successor] <= processed[node] {
+                if processed[successor] > processed[node] {
                     return true;
                 }
             }

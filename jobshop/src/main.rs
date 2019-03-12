@@ -11,12 +11,21 @@ fn main() {
     let problem = Problem::read(path).unwrap();
     let graph = ProblemGraph::<LinkedGraph<ProblemNode>>::from(&problem).0;
 
-    println!("Problem statement: {:#?}", problem);
-    println!("Graph statement: {:?}", graph);
+    //println!("Problem statement: {:#?}", problem);
+    //println!("Graph statement: {:?}", graph);    
+    let graph = graph.into_directed().unwrap();
+    println!("directed graph: {:?}", graph);
+    graph.force_critical_path();
+    let graph = graph.flip_edge(&5, &6).unwrap();
+    graph.force_critical_path();
 
-    println!("directed graph: {:?}", graph.into_directed().unwrap());
+    let graph = graph.flip_edge(&2, &6).unwrap();
+    graph.force_critical_path();
 
-    //println!("cyclic graph: {:?}", graph.flip_edge(&3, &5).unwrap());
+    let graph = graph.flip_edge(&3, &4).unwrap();
+    graph.force_critical_path();
+
+    //println!("cyclic graph: {:?}", graph.flip_edge(&3, &9).unwrap());
 
     /*let mut f = File::create("test.dot").unwrap();
     dot::render(&graph, &mut f).expect("Could not render to vizgraph");*/

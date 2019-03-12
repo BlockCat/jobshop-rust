@@ -71,6 +71,10 @@ impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
 	}
 
     fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
+        if !self.disjunctions[node_1.id()].contains(&node_2.id()) {
+            return Err(GraphError::InvalidEdge);
+        }
+
         let mut cloned = self.clone();
         let node_1 = node_1.id();
         let node_2 = node_2.id();
@@ -91,6 +95,10 @@ impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
 	}
 
     fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
+        if !self.successors[node_1.id()].contains(&node_2.id()) {
+            return Err(GraphError::InvalidEdge);
+        }
+        
         let mut cloned = self.clone();
         let node_1 = node_1.id();
         let node_2 = node_2.id();
