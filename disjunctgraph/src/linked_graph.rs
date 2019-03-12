@@ -1,0 +1,104 @@
+use std::collections::{ HashSet, HashMap };
+
+use crate::{ NodeId, NodeWeight, Graph, Relation, self as disjunctgraph };
+
+#[derive(Clone)]
+pub struct LinkedGraph<T: NodeId + Clone> {
+    nodes: Vec<T>,
+    successors: Vec<HashSet<usize>>,
+    predecessors: Vec<HashSet<usize>>,
+    disjunctions: Vec<HashSet<usize>>
+}
+
+impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
+
+    fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self {
+        unimplemented!()
+    }
+
+    fn nodes(&self) -> &[T] {
+		&self.nodes
+	}
+
+	fn source(&self) -> &T {
+		&self.nodes().first().unwrap()
+	}
+
+	fn sink(&self) -> &T {
+		&self.nodes().last().unwrap()
+	}
+
+    fn successors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
+        self.successors[id.id()].iter().map(|x| &self.nodes[*x]).collect()
+	}
+
+    fn predecessors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
+		self.predecessors[id.id()].iter().map(|x| &self.nodes[*x]).collect()
+	}
+
+    fn disjunctions<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
+		self.disjunctions[id.id()].iter().map(|x| &self.nodes[*x]).collect()
+	}
+
+    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+        let mut cloned = self.clone();
+        let node_1 = node_1.id();
+        let node_2 = node_2.id();
+        
+        // Remove from disjunctions        
+        cloned.disjunctions[node_1].remove(&node_2);
+        cloned.disjunctions[node_2].remove(&node_1);
+        
+        // Node_1 -> Node_2
+        cloned.successors[node_1].insert(node_2);
+        cloned.predecessors[node_2].insert(node_1);        
+		
+        if cloned.is_cyclic() {
+            Err(disjunctgraph::GraphError::Cyclic)
+        } else {
+            Ok(cloned)
+        }
+	}
+
+    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+        let mut cloned = self.clone();
+        let node_1 = node_1.id();
+        let node_2 = node_2.id();
+        // node_1 -> node_2
+        cloned.successors[node_1].remove(&node_2);
+        cloned.predecessors[node_2].remove(&node_1);
+
+        cloned.predecessors[node_1].insert(node_2);
+        cloned.successors[node_2].insert(node_1);
+        		
+        if cloned.is_cyclic() {
+            Err(disjunctgraph::GraphError::Cyclic)
+        } else {
+            Ok(cloned)
+        }
+	}
+
+    // For now, the better way will probably be to create a topological ordering and go from there
+    fn into_directed(&self) -> disjunctgraph::Result<Self> {
+        let mut cloned = self.clone();
+        // For every disjunction, flip edge
+		for node_1 in 0..(self.nodes.len()-1) {
+            for node_2 in self.disjunctions[node_1].iter().cloned() {
+                if node_2 > node_1 {
+                    // It'll become node_1 -> node_2
+                    cloned.disjunctions[node_1].remove(&node_2);
+                    cloned.disjunctions[node_2].remove(&node_1);
+
+                    cloned.successors[node_1].insert(node_2);
+                    cloned.predecessors[node_2].insert(node_1);
+                }
+            }
+        }
+
+        if cloned.is_cyclic() {
+            Err(disjunctgraph::GraphError::Cyclic)
+        } else {
+            Ok(cloned)
+        }
+	}
+}

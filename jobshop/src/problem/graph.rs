@@ -1,73 +1,34 @@
-use std::collections::{ HashSet, HashMap };
-use disjunctgraph::{ NodeId, NodeWeight, Graph, self};
+use crate::problem::{ Problem, ProblemNode };
+use disjunctgraph::{ Graph, Relation };
 
-use crate::problem::Problem;
+pub struct ProblemGraph<I>(pub I);
 
-// This is a disjunctive graph.
-// No edges should be added after creation.
-// Disjunctions can be fixed, this will return a new instance of the graph.
-// Would be nice if two nodes could reference the same edge, then a change in the edge would result in a change in the nodes.
-// Switch to:
-// https://ac.els-cdn.com/S0377221799004865/1-s2.0-S0377221799004865-main.pdf?_tid=b48d4410-024d-4d81-9762-34e0b7b924a4&acdnat=1552055948_805fca074e1e30d2c269cbf795004fd4
-#[derive(Debug, Clone)]
-pub struct DisjunctiveGraph {
-	nodes: Vec<Node>
-}
+impl<I: Graph<ProblemNode>> From<&Problem> for ProblemGraph<I> {
 
-#[derive(Debug, Clone)]
-pub struct Node {
-	id: usize,
-	job_id: u32,
-	machine_id: u32,
-	processing_time: u32,
-	predecessors: HashSet<usize>,
-	successors: HashSet<usize>,
-	disjunctions: HashSet<usize>    
-}
+	fn from(problem: &Problem) -> ProblemGraph<I> {
 
-impl NodeId for Node {
-	fn id(&self) -> usize { self.id }
-}
-
-impl NodeWeight for Node {
-	fn weight(&self) -> u32 { self.processing_time }
-}
-
-impl Graph<Node> for DisjunctiveGraph {
-	fn nodes(&self) -> &[Node] {
-		&self.nodes
-	}
-
-	fn source(&self) -> &Node {
-		unimplemented!()
-	}
-
-	fn sink(&self) -> &Node {
-		unimplemented!()
-	}
-
-    fn successors(&self, id: &impl NodeId) -> Vec<&Node> {
-		unimplemented!()
-	}
-
-    fn predecessors(&self, id: &impl NodeId) -> Vec<&Node> {
-		unimplemented!()
-	}
-    fn disjunctions(&self, id: &impl NodeId) -> Vec<&Node> {
-		unimplemented!()
-	}
-    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
-		unimplemented!()
-	}
-    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
-		unimplemented!()
-	}
-    fn into_directed(&self) -> disjunctgraph::Result<Self> {
-		unimplemented!()
+		// Create nodes
+		
+		let source = ProblemNode { id: counter, weight: 0 };		
+		let nodes: Vec<ProblemNode> = problem.jobs.iter().flatten()
+			.map(|x| {
+				counter += 1;
+				ProblemNode {
+					id: counter,
+					weight: problem.activities[*x].process_time,
+				}
+			}).collect();
+		let sink = ProblemNode { id: counter + 1, weight: 0 };
+		
+		let mut edges: Vec<Vec<Relation>> = nodes.iter().map(|_| Vec::new()).collect();		
+		
+		
+		ProblemGraph(I::create(nodes, edges))
 	}
 }
 
-impl From<&Problem> for DisjunctiveGraph {
+/*
+impl From<&Problem> for LinkedGraph {
 	fn from(problem: &Problem) -> Self {
 
 		// Create a node for every activity, still grouped by job and in order
@@ -134,7 +95,9 @@ impl From<&Problem> for DisjunctiveGraph {
 			nodes
 		}
 	}
-}
+}*/
+
+
 /*
 type DotNode = usize;
 type DotEdge = (dot::ArrowShape, DotNode, DotNode);

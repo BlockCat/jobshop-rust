@@ -6,7 +6,7 @@ use crate::schedule::Schedule;
 
 mod graph;
 
-pub use graph::DisjunctiveGraph;
+pub use graph::ProblemGraph;
 
 pub trait ProblemSolver {
     fn solve(problem: &Problem) -> Schedule;
@@ -83,13 +83,6 @@ impl Problem {
     }
 }
 
-impl Into<disjunctgraph::MatrixGraph<ProblemNode>> for &Problem {
-
-    fn into(self) -> disjunctgraph::MatrixGraph<ProblemNode> {
-        unimplemented!()
-    }
-}
-
 #[derive(Clone)]
 pub struct ProblemNode {
     id: usize,
@@ -103,3 +96,5 @@ impl disjunctgraph::NodeId for ProblemNode {
 impl disjunctgraph::NodeWeight for ProblemNode {
     fn weight(&self) -> u32 { self.weight }
 }
+
+

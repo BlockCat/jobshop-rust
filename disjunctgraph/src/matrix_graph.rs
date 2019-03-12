@@ -15,10 +15,10 @@ use crate::{ NodeId, NodeWeight, Graph, self as disjunctgraph };
 // Column (n+1) references to the first successor
 // Column (n+2) references to the first predecessor
 // Column (n+3) references to the first disjunction
-
+/*
 #[derive(Clone)]
 pub struct MatrixGraph<T: NodeId + Clone> {
-    nodes: Vec<T>,    
+    nodes: Vec<T>,
     matrix: Vec<Vec<i32>>,
     x_dim: usize,
 }
@@ -110,4 +110,4 @@ impl<'a> Iterator for MatrixIterator<'a> {
             Some(self.column)
         }
     }
-}
+}*/

@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 
 mod matrix_graph;
+mod linked_graph;
 
-pub use matrix_graph::MatrixGraph;
+pub use linked_graph::LinkedGraph;
 
 pub type Result<T> = std::result::Result<T, GraphError>;
 
@@ -25,7 +27,12 @@ impl NodeId for usize {
     }
 }
 
+pub enum Relation {
+    Successor(usize), Predecessor(usize), Disjunctive(usize)
+}
+
 pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
+    fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self;
     fn nodes(&self) -> &[T];
     fn source(&self) -> &T;
     fn sink(&self) -> &T;
