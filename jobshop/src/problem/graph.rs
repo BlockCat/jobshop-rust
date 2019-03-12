@@ -8,147 +8,78 @@ impl<I: Graph<ProblemNode>> From<&Problem> for ProblemGraph<I> {
 	fn from(problem: &Problem) -> ProblemGraph<I> {
 
 		// Create nodes
-		
-		let source = ProblemNode { id: counter, weight: 0 };		
-		let nodes: Vec<ProblemNode> = problem.jobs.iter().flatten()
-			.map(|x| {
-				counter += 1;
+		let mut nodes: Vec<ProblemNode> = Vec::new();
+		nodes.push(ProblemNode {
+			id: 0,
+			weight: 0
+		});
+		nodes.extend(problem.jobs.iter().flatten().enumerate()
+			.map(|(k, x)| {				
 				ProblemNode {
-					id: counter,
+					id: k + 1,
 					weight: problem.activities[*x].process_time,
 				}
-			}).collect();
-		let sink = ProblemNode { id: counter + 1, weight: 0 };
-		
+			})
+		);
+		nodes.push(ProblemNode {
+			id: nodes.len(),
+			weight: 0
+		});
+
 		let mut edges: Vec<Vec<Relation>> = nodes.iter().map(|_| Vec::new()).collect();		
 		
+		// Add edges within job
+		for activities in &problem.jobs {
+			for activity in activities.windows(2) {
+				// node_1 -> node_2
+				// Reminder that the indices within [activitys] point to the nodes within the problem.
+				// Not to the graph nodes. graph nodes have to extra nodes: sink and source
+				let node_1 = activity[0] + 1; // Skip the source node
+				let node_2 = activity[1] + 1; // Skip the source node
+				edges[node_1].push(Relation::Successor(node_2));
+				edges[node_2].push(Relation::Predecessor(node_1));
+			}
+
+			// Add source edges
+			let n = nodes.len() - 1;
+			let first = activities[0] + 1;
+			let last = activities.last().unwrap() + 1;
+			edges[0].push(Relation::Successor(first));
+			edges[first].push(Relation::Predecessor(0));
+
+			// Add sink edges			
+			edges[n].push(Relation::Predecessor(last));
+			edges[last].push(Relation::Successor(n));
+		}
+
+		// Add source edges
+		
+		// Add disjunctions between activities:
+		// - on the same machine
+		// - not on the same job
+		type Activity = (usize, usize); // (Job, node_index)		
+		let mut mapping: Vec<Vec<Activity>> = vec!(vec!(); problem.machines as usize);
+		for (job, activities) in problem.jobs.iter().enumerate() {
+			for activity in activities {
+				let machine = problem.activities[*activity].machine_id as usize;				
+				mapping[machine - 1].push((job, activity + 1));
+			}
+		}
+
+		for activities in mapping {
+			for i in 0..(activities.len() - 1) {
+				for j in (i+1)..activities.len() {
+					let ac_1 = activities[i];
+					let ac_2 = activities[j];
+
+					if ac_1.0 != ac_2.0 {
+						edges[ac_1.1].push(Relation::Disjunctive(ac_2.1));
+						edges[ac_2.1].push(Relation::Disjunctive(ac_1.1));
+					}
+				}
+			}
+		}
 		
 		ProblemGraph(I::create(nodes, edges))
 	}
 }
-
-/*
-impl From<&Problem> for LinkedGraph {
-	fn from(problem: &Problem) -> Self {
-
-		// Create a node for every activity, still grouped by job and in order
-		let mut counter = 0;
-		let mut jobs: Vec<Vec<Node>> = problem.jobs.iter().enumerate()
-			.map(|(job_id, activities)| {
-				// For every activity create a node
-				activities.iter()                    
-					.map(|id| &problem.activities[*id])
-					.map(|activity| {
-						let id = counter;
-						counter += 1;
-						Node {
-							id, 
-							job_id: job_id as u32,
-							machine_id: activity.machine_id,
-							processing_time: activity.process_time,
-							predecessors: HashSet::new(),
-							successors: HashSet::new(),
-							disjunctions: HashSet::new(),
-						}
-					}).collect::<Vec<_>>()
-			}).collect::<Vec<_>>();
-
-		// Create a mapping for which Activity on which machine
-		let mut mapping: HashMap<u32, Vec<(usize, usize)>> = HashMap::with_capacity(problem.machines as usize); // machine_id -> [(job_index, activity_index)]
-		for (job_id, activities) in jobs.iter().enumerate() {
-			for activity in activities.iter() {
-				mapping.entry(activity.machine_id)
-					.and_modify(|x| x.push((job_id, activity.id)))
-					.or_insert(vec!((job_id, activity.id)));
-			}
-		}
-
-		// Create arcs between activities in the same job.
-		for activities in &mut jobs {
-			let start_node = activities[0].id;
-			let last_node = activities.last().unwrap().id;
-
-			for node in start_node..last_node {                
-				activities[node - start_node].successors.insert(node + 1);                
-				activities[node + 1 - start_node].predecessors.insert(node);
-			}
-		}
-
-		let mut nodes: Vec<Node> = jobs.into_iter().flatten().collect();
-
-		// Search for activities on other jobs with the same machine.
-		for activities in mapping.values() {			
-			for (i, (job_1, ac1)) in (0..(activities.len() - 1)).map(|x| (x, activities[x])) {
-				let others = ((i+1)..activities.len())
-					.map(|x| activities[x])
-					.filter(|(_,   ac2)| &ac1 != ac2 ) // Different activity
-					.filter(|(job_2, _)| &job_1 != job_2); // Different job
-
-				for (_, ac2) in others {
-					nodes[ac1].disjunctions.insert(ac2);
-					nodes[ac2].disjunctions.insert(ac1);	
-				}
-			}
-		}
-
-		DisjunctiveGraph {
-			nodes
-		}
-	}
-}*/
-
-
-/*
-type DotNode = usize;
-type DotEdge = (dot::ArrowShape, DotNode, DotNode);
-
-impl<'a> dot::Labeller<'a, DotNode, DotEdge> for DisjunctiveGraph {
-	fn graph_id(&'a self) -> dot::Id<'a> {
-		dot::Id::new("G").unwrap()
-	}
-	
-	fn node_id(&'a self, n: &DotNode) -> dot::Id<'a> {
-        dot::Id::new(format!("N{}", n)).unwrap()
-    }
-
-    fn node_label<'b>(&'b self, n: &DotNode) -> dot::LabelText<'b> {
-        dot::LabelText::LabelStr(format!("{}", n).into())
-    }
-
-    fn edge_label<'b>(&'b self, _: &DotEdge) -> dot::LabelText<'b> {
-        dot::LabelText::LabelStr("".into())
-    }
-
-	fn edge_end_arrow(&'a self, e: &DotEdge) -> dot::Arrow {
-		dot::Arrow::from_arrow(e.0)
-	}
-}
-
-impl<'a> dot::GraphWalk<'a, DotNode, DotEdge> for DisjunctiveGraph {
-
-	fn nodes(&self) -> dot::Nodes<'a, DotNode> {		
-		self.nodes().iter().map(|x| x.id()).collect()
-	}
-
-	fn edges(&'a self) -> dot::Edges<'a, DotEdge> {
-		use dot::{ ArrowShape, Fill, Side };
-		let directed = ArrowShape::Normal(Fill::Filled, Side::Both);
-		let undirected = ArrowShape::NoArrow;
-
-		let successors = self.nodes()
-			.iter()
-			.flat_map(|x| self.successors(x).iter().map(|s| (x, s)))
-			.map(|(a, b)| (directed, a.id(), b.id()));
-		
-		let disjunctions = self.nodes()
-			.iter()
-			.flat_map(|x| self.disjunctions(x).iter().map(|s| (x, s)))
-			.filter(|(a, b)| b.id() > a.id())
-			.map(|(a, b)| (undirected, a.id(), b.id()));
-
-		successors.chain(disjunctions).collect()		
-	}
-
-	fn source(&self, e: &DotEdge) -> DotNode { e.1 }
-    fn target(&self, e: &DotEdge) -> DotNode { e.2 }
-}*/

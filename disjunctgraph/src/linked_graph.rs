@@ -1,8 +1,8 @@
 use std::collections::{ HashSet, HashMap };
 
-use crate::{ NodeId, NodeWeight, Graph, Relation, self as disjunctgraph };
+use crate::{ NodeId, NodeWeight, Graph, Relation, GraphError, self as disjunctgraph };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LinkedGraph<T: NodeId + Clone> {
     nodes: Vec<T>,
     successors: Vec<HashSet<usize>>,
@@ -13,7 +13,37 @@ pub struct LinkedGraph<T: NodeId + Clone> {
 impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
 
     fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self {
-        unimplemented!()
+
+        let successors = edges.iter()
+            .map(|x| x.iter().filter_map(|x| {
+                    match x {
+                        Relation::Successor(e) => Some(*e),
+                        _ => None
+                    }
+            }).collect::<HashSet<_>>());
+
+        let predecessors = edges.iter()
+            .map(|x| x.iter().filter_map(|x| {
+                    match x {
+                        Relation::Predecessor(e) => Some(*e),
+                        _ => None
+                    }
+            }).collect::<HashSet<_>>());
+
+        let disjunctions = edges.iter()
+            .map(|x| x.iter().filter_map(|x| {
+                    match x {
+                        Relation::Disjunctive(e) => Some(*e),
+                        _ => None
+                    }
+            }).collect::<HashSet<_>>());
+        
+        LinkedGraph {
+            nodes,
+            successors: successors.collect(),
+            predecessors: predecessors.collect(),
+            disjunctions: disjunctions.collect()
+        }
     }
 
     fn nodes(&self) -> &[T] {
@@ -40,7 +70,7 @@ impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
 		self.disjunctions[id.id()].iter().map(|x| &self.nodes[*x]).collect()
 	}
 
-    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
         let mut cloned = self.clone();
         let node_1 = node_1.id();
         let node_2 = node_2.id();
@@ -60,7 +90,7 @@ impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
         }
 	}
 
-    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> disjunctgraph::Result<Self> {
+    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
         let mut cloned = self.clone();
         let node_1 = node_1.id();
         let node_2 = node_2.id();
@@ -79,7 +109,7 @@ impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
 	}
 
     // For now, the better way will probably be to create a topological ordering and go from there
-    fn into_directed(&self) -> disjunctgraph::Result<Self> {
+    fn into_directed(&self) -> Result<Self, GraphError> {
         let mut cloned = self.clone();
         // For every disjunction, flip edge
 		for node_1 in 0..(self.nodes.len()-1) {

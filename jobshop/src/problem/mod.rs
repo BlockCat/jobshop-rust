@@ -83,7 +83,7 @@ impl Problem {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProblemNode {
     id: usize,
     weight: u32
