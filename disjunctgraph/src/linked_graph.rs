@@ -1,6 +1,6 @@
 use std::collections::{ HashSet, HashMap };
 
-use crate::{ NodeId, NodeWeight, Graph, Relation, GraphError, self as disjunctgraph };
+use crate::{ NodeId, GraphNode, Graph, Relation, GraphError, self as disjunctgraph };
 
 #[derive(Clone, Debug)]
 pub struct LinkedGraph<T: NodeId + Clone> {
@@ -10,7 +10,7 @@ pub struct LinkedGraph<T: NodeId + Clone> {
     disjunctions: Vec<HashSet<usize>>
 }
 
-impl<T: NodeId + NodeWeight + Clone> Graph<T> for LinkedGraph<T> {
+impl<T: NodeId + GraphNode + Clone> Graph<T> for LinkedGraph<T> {
 
     fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self {
 

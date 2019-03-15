@@ -1,5 +1,7 @@
 use crate::problem::{ Activity, Problem, ProblemNode };
 
+use disjunctgraph::{Graph, NodeId, GraphNode };
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScheduledActivity {    
     pub starting_time: u32,
@@ -21,15 +23,49 @@ impl Schedule {
     pub fn length() -> u32 {
         unimplemented!();
     }
-}
 
-impl<T: disjunctgraph::Graph<ProblemNode>> From<T> for Schedule {
 
-    fn from(graph: T) -> Schedule {
-        unimplemented!()
+    pub fn from_graph<I: Graph<ProblemNode>>(problem: Problem, graph: I) -> Schedule {
+        use std::collections::VecDeque;
+        
+        // Use shortest path algorithm (modified)
+        // with negative edges
+        let source = graph.source().id();
+        
+        let mut processed = vec!(0u32; graph.nodes().len());        
+        let mut stack: VecDeque<usize> = VecDeque::new();
+        stack.push_back(source);
+
+        while !stack.is_empty() {
+            let current_node = stack.pop_front().unwrap();
+            let weight = graph.nodes()[current_node].weight();
+
+            for successor in graph.successors(&current_node) {
+                let successor = successor.id();
+                if processed[successor] <= processed[current_node] + weight {
+                    processed[successor] = processed[current_node] + weight;                    
+                    stack.push_back(successor);
+                }
+            }
+        }
+        
+        println!("Criticals: {:?}", processed.last().unwrap());
+        let jobs = problem.jobs.clone();
+        let activities = problem.activities.into_iter().enumerate()
+            .map(|(i, activity)| {
+                ScheduledActivity {
+                    activity,
+                    starting_time: processed[i + 1]
+                }
+            });
+
+        Schedule {
+            jobs,
+            activities: activities.collect()
+        }
     }
-}
 
+}
 
 impl From<OrderedActivities> for Schedule {
     fn from(ordered_activities: OrderedActivities) -> Schedule {

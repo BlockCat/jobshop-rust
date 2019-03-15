@@ -1,2 +1,2 @@
 [workspace]
-members = ["disjunctgraph", "jobshop"]
+members = ["disjunctgraph", "jobshop", "jobshop-gui"]

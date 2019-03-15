@@ -12,16 +12,16 @@ fn from_ordered_jobs() {
 
 //https://acrogenesis.com/or-tools/documentation/user_manual/_images/schedule1.png
 fn simple_problem() -> Problem {
-    let ac0 = Activity {id: 0, process_time: 3, machine_id: 0, precedences: vec!()};
-    let ac1 = Activity {id: 1, process_time: 2, machine_id: 1, precedences: vec!(0)};
-    let ac2 = Activity {id: 2, process_time: 2, machine_id: 2, precedences: vec!(0, 1)};
+    let ac0 = Activity {id: 0, process_time: 3, machine_id: 1, precedences: vec!()};
+    let ac1 = Activity {id: 1, process_time: 2, machine_id: 2, precedences: vec!(0)};
+    let ac2 = Activity {id: 2, process_time: 2, machine_id: 3, precedences: vec!(0, 1)};
 
-    let ac3 = Activity {id: 3, process_time: 2, machine_id: 0, precedences: vec!()};
-    let ac4 = Activity {id: 4, process_time: 1, machine_id: 2, precedences: vec!(3)};
-    let ac5 = Activity {id: 5, process_time: 4, machine_id: 1, precedences: vec!(3, 4)};
+    let ac3 = Activity {id: 3, process_time: 2, machine_id: 1, precedences: vec!()};
+    let ac4 = Activity {id: 4, process_time: 1, machine_id: 3, precedences: vec!(3)};
+    let ac5 = Activity {id: 5, process_time: 4, machine_id: 2, precedences: vec!(3, 4)};
 
-    let ac6 = Activity {id: 6, process_time: 4, machine_id: 1, precedences: vec!()};
-    let ac7 = Activity {id: 7, process_time: 3, machine_id: 2, precedences: vec!(6)};
+    let ac6 = Activity {id: 6, process_time: 4, machine_id: 2, precedences: vec!()};
+    let ac7 = Activity {id: 7, process_time: 3, machine_id: 3, precedences: vec!(6)};
     
     Problem {
         machines: 3,

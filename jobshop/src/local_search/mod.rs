@@ -10,11 +10,14 @@ struct LocalSearch {}
 type LinkedGraph = disjunctgraph::LinkedGraph<ProblemNode>;
 
 impl ProblemSolver for LocalSearch {
+    type Solution = LinkedGraph;
 
-    fn solve(problem: &Problem) -> Schedule {        
+    fn solve(problem: &Problem) -> Self::Solution {        
         let graph: ProblemGraph<LinkedGraph> = problem.into();
         let graph = graph.0;
-        let critical_path = graph.critical_path();
+        let (critical_length, critical_path) = graph.critical_path().unwrap();
+
+        let mut temperature = 10;
         
         unimplemented!()
     }

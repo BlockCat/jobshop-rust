@@ -14,7 +14,7 @@ pub trait NodeId {
     fn id(&self) -> usize;
 }
 
-pub trait NodeWeight {
+pub trait GraphNode {
     fn weight(&self) -> u32 {
         1
     }
@@ -31,7 +31,7 @@ pub enum Relation {
     Successor(usize), Predecessor(usize), Disjunctive(usize)
 }
 
-pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
+pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
     fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self;
     fn nodes(&self) -> &[T];
     fn source(&self) -> &T;
@@ -43,7 +43,7 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
     fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
 
-    fn critical_path(&self) -> std::result::Result<Vec<&T>, GraphError> {        
+    fn critical_path(&self) -> std::result::Result<(u32, Vec<&T>), GraphError> {        
         if self.is_cyclic() {
             Err(GraphError::Cyclic)
         } else {
@@ -51,7 +51,7 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
         }
     }
 
-    fn force_critical_path(&self) -> Vec<&T> {
+    fn force_critical_path(&self) -> (u32, Vec<&T>) {
         use std::collections::VecDeque;
         // Use shortest path algorithm (modified)
         // with negative edges
@@ -78,9 +78,19 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
             }
         }
 
-        println!("Backtrack: {:?}", backtracker);
-        println!("Criticals: {:?}", processed);        
-        unimplemented!()        
+        let mut path = Vec::new();
+        let mut pointer = backtracker[self.sink().id()];
+        while pointer != 0 {
+            let prev = backtracker[pointer];
+            let node = &self.nodes()[pointer];
+            path.push(node);
+            pointer = prev;
+        }
+        path.reverse();
+        //println!("Backtrack: {:?}", path.iter().map(|x| x.id()).collect::<Vec<_>>());
+        //println!("Criticals: {:?}", processed.last().unwrap());
+        
+        (*processed.last().unwrap(), path)
     }
 
     fn is_cyclic(&self) -> bool {
@@ -121,29 +131,21 @@ pub trait Graph<T> where T: NodeId + NodeWeight, Self: Sized {
                 Status::Visisted(current_node) => {
                     if processed[current_node] == 0 {
                         processed[current_node] = counter;                    
-                        in_stack[current_node] = false;
+                        in_stack[current_node] = false;                        
+
+                        // Find contradiction
+                        let any_predecessor_smaller = self.predecessors(&current_node).iter()
+                                .any(|x| processed[x.id()] > 0 && processed[x.id()] < counter );
+                        
+                        if any_predecessor_smaller {
+                            return true;
+                        }
+
                         counter += 1;
                     }
                 }
             }
         }
-
-        //*processed.last_mut().unwrap() = std::u16::MAX;
-        
-        println!("topology ordering: {:?}", processed);        
-        
-        // Find contradiction in O(N + M)
-        for node in self.nodes() {
-            let node = node.id();
-            for successor in self.successors(&node) {
-                let successor = successor.id();
-
-                if processed[successor] > processed[node] {
-                    return true;
-                }
-            }
-        }
-
         false
     }
 }

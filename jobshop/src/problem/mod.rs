@@ -8,8 +8,10 @@ mod graph;
 
 pub use graph::ProblemGraph;
 
+
 pub trait ProblemSolver {
-    fn solve(problem: &Problem) -> Schedule;
+    type Solution;
+    fn solve(problem: &Problem) -> Self::Solution;
 }
 
 #[derive(Debug, Clone)]
@@ -86,14 +88,14 @@ impl Problem {
 #[derive(Clone, Debug)]
 pub struct ProblemNode {
     id: usize,
-    weight: u32
+    weight: u32,    
 }
 
 impl disjunctgraph::NodeId for ProblemNode {
     fn id(&self) -> usize { self.id }
 }
 
-impl disjunctgraph::NodeWeight for ProblemNode {
+impl disjunctgraph::GraphNode for ProblemNode {
     fn weight(&self) -> u32 { self.weight }
 }
 

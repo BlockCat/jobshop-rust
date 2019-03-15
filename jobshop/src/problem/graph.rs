@@ -11,7 +11,7 @@ impl<I: Graph<ProblemNode>> From<&Problem> for ProblemGraph<I> {
 		let mut nodes: Vec<ProblemNode> = Vec::new();
 		nodes.push(ProblemNode {
 			id: 0,
-			weight: 0
+			weight: 0,			
 		});
 		nodes.extend(problem.jobs.iter().flatten().enumerate()
 			.map(|(k, x)| {				
