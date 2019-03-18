@@ -21,7 +21,7 @@ use relm::{Relm, Update, Widget, WidgetTest, ContainerWidget};
 
 mod widget_graph;
 
-
+/*
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -90,8 +90,8 @@ impl Widget for Win {
 fn main() {
     Win::run(()).unwrap();
 }
+*/
 
-/*
 fn main() {
 
     println!("Starting");
@@ -105,10 +105,10 @@ fn main() {
     do_local_search(problem);
 
     
-}*/
+}
 
 fn do_local_search(problem: Problem) {
-    let ls = LocalSearch::new(100);
+    let ls = LocalSearch::new(4000);
 
     let graph = ls.solve(&problem);
 
