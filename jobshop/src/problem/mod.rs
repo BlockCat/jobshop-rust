@@ -11,7 +11,7 @@ pub use graph::ProblemGraph;
 
 pub trait ProblemSolver {
     type Solution;
-    fn solve(problem: &Problem) -> Self::Solution;
+    fn solve(&self, problem: &Problem) -> Self::Solution;
 }
 
 #[derive(Debug, Clone)]
@@ -88,7 +88,9 @@ impl Problem {
 #[derive(Clone, Debug)]
 pub struct ProblemNode {
     id: usize,
-    weight: u32,    
+    weight: u32,
+    job_id: Option<usize>,
+    machine_id: Option<u32>
 }
 
 impl disjunctgraph::NodeId for ProblemNode {
@@ -96,7 +98,14 @@ impl disjunctgraph::NodeId for ProblemNode {
 }
 
 impl disjunctgraph::GraphNode for ProblemNode {
+    fn create(id: usize, weight: u32, machine_id: Option<u32>, job_id: Option<usize>) -> Self {
+        ProblemNode {
+            id, weight, job_id, machine_id
+        }
+    }
     fn weight(&self) -> u32 { self.weight }
+    fn job_id(&self) -> Option<usize> { self.job_id }
+    fn machine_id(&self) -> Option<u32> {self.machine_id }
 }
 
 

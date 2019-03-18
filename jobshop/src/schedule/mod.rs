@@ -34,7 +34,8 @@ impl Schedule {
         
         let mut processed = vec!(0u32; graph.nodes().len());        
         let mut stack: VecDeque<usize> = VecDeque::new();
-        stack.push_back(source);
+        //stack.push_back(source);
+        stack.extend(graph.successors(&source).iter().map(|x| x.id()));
 
         while !stack.is_empty() {
             let current_node = stack.pop_front().unwrap();
@@ -42,7 +43,7 @@ impl Schedule {
 
             for successor in graph.successors(&current_node) {
                 let successor = successor.id();
-                if processed[successor] <= processed[current_node] + weight {
+                if processed[successor] < processed[current_node] + weight {
                     processed[successor] = processed[current_node] + weight;                    
                     stack.push_back(successor);
                 }

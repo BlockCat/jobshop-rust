@@ -1,30 +1,28 @@
 use crate::problem::{ Problem, ProblemNode };
-use disjunctgraph::{ Graph, Relation };
+use disjunctgraph::{ Graph, Relation, NodeId, GraphNode };
 
-pub struct ProblemGraph<I>(pub I);
+pub struct ProblemGraph<I, J>(pub I, std::marker::PhantomData<J>);
 
-impl<I: Graph<ProblemNode>> From<&Problem> for ProblemGraph<I> {
+impl<J: GraphNode, I: Graph<J>> From<&Problem> for ProblemGraph<I, J> {
 
-	fn from(problem: &Problem) -> ProblemGraph<I> {
+	fn from(problem: &Problem) -> ProblemGraph<I, J> {
 
 		// Create nodes
-		let mut nodes: Vec<ProblemNode> = Vec::new();
-		nodes.push(ProblemNode {
-			id: 0,
-			weight: 0,			
-		});
-		nodes.extend(problem.jobs.iter().flatten().enumerate()
-			.map(|(k, x)| {				
-				ProblemNode {
-					id: k + 1,
-					weight: problem.activities[*x].process_time,
-				}
-			})
-		);
-		nodes.push(ProblemNode {
-			id: nodes.len(),
-			weight: 0
-		});
+		let mut nodes: Vec<J> = Vec::new();
+		let mut counter = 0;
+		nodes.push(J::create(0, 0, None, None));
+
+		for (job_id, activities) in problem.jobs.iter().enumerate() {
+			nodes.extend(activities.iter()
+				.map(|x| {
+					counter += 1;
+					let id = counter;
+					let weight = problem.activities[*x].process_time;
+					let machine_id = problem.activities[*x].machine_id;
+					J::create(id, weight, Some(machine_id), Some(job_id))
+				}));
+		}
+		nodes.push(J::create(nodes.len(), 0, None, None));		
 
 		let mut edges: Vec<Vec<Relation>> = nodes.iter().map(|_| Vec::new()).collect();		
 		
@@ -80,6 +78,6 @@ impl<I: Graph<ProblemNode>> From<&Problem> for ProblemGraph<I> {
 			}
 		}
 		
-		ProblemGraph(I::create(nodes, edges))
+		ProblemGraph(I::create(nodes, edges), std::marker::PhantomData)
 	}
 }
