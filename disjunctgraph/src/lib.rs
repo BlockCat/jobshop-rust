@@ -14,10 +14,11 @@ pub trait NodeId {
     fn id(&self) -> usize;
 }
 
-pub trait GraphNode {
-    fn weight(&self) -> u32 {
-        1
-    }
+pub trait GraphNode: NodeId {
+    fn create(id: usize, weight: u32, machine_id: Option<u32>, job_id: Option<usize>) -> Self;
+    fn weight(&self) -> u32;
+    fn job_id(&self) -> Option<usize>;
+    fn machine_id(&self) -> Option<u32>;
 }
 
 impl NodeId for usize {
@@ -56,20 +57,19 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
         // Use shortest path algorithm (modified)
         // with negative edges
         let source = self.source().id();
-        let sink = self.sink().id();
-
 
         let mut processed = vec!(0u32; self.nodes().len());
         let mut backtracker = vec!(0usize; self.nodes().len());
         let mut stack: VecDeque<usize> = VecDeque::new();
-        stack.push_back(source);
+        //stack.push_back(source);
+        stack.extend(self.successors(&source).iter().map(|x| x.id()));
 
         while !stack.is_empty() {
             let current_node = stack.pop_front().unwrap();
-            let weight = self.nodes()[current_node].weight();
+            let weight = self.nodes()[current_node].weight();            
 
             for successor in self.successors(&current_node) {
-                let successor = successor.id();
+                let successor = successor.id();                
                 if processed[successor] <= processed[current_node] + weight {
                     processed[successor] = processed[current_node] + weight;
                     backtracker[successor] = current_node;

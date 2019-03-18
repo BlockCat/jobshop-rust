@@ -7,8 +7,11 @@ edition = "2018"
 [dependencies]
 disjunctgraph = { path = "../disjunctgraph"}
 jobshop = { path = "../jobshop"}
+rand = "0.6.5"
 
-gtk = "0.5"
+gtk = { version = "0.5", features = ["v3_22"] }
+gdk = "0.9.0"
+
 relm = "0.15.2"
 relm-derive = "0.15.2"
 relm-attributes = "0.15.2"
