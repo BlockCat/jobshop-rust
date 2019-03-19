@@ -5,6 +5,7 @@ extern crate relm;
 #[macro_use]
 extern crate relm_derive;
 extern crate relm_attributes;
+extern crate cairo;
 
 use relm_attributes::widget;
 
@@ -14,12 +15,14 @@ use jobshop::schedule::Schedule;
 
 use jobshop::local_search::LocalSearch;
 use widget_graph::*;
+use widget_constraints::*;
 
 use gtk::prelude::*;
-use gtk::Orientation::Vertical;
+use gtk::Orientation::{ Vertical, Horizontal };
 use relm::{Relm, Update, Widget, WidgetTest, ContainerWidget};
 
 mod widget_graph;
+mod widget_constraints;
 
 
 #[derive(Msg)]
@@ -38,7 +41,6 @@ pub struct Model {
 #[widget]
 impl Widget for Win {
 
-    
     fn model() -> Model {
         let path = "bench_la02.txt";
         let problem = Problem::read(path).unwrap();
@@ -47,10 +49,6 @@ impl Widget for Win {
             counter: 0,
             problem, graph
         }
-    }
-
-    fn init_view(&mut self) {
-        self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
     }
 
     fn update(&mut self, event: Msg) {
@@ -67,7 +65,10 @@ impl Widget for Win {
                 self.model.graph = graph;
                 let (span, _) = self.model.graph.force_critical_path();
                 self.model.counter = span;
+                
                 self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+                self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+
             },
             Msg::Quit => gtk::main_quit(),
         }
@@ -98,8 +99,15 @@ impl Widget for Win {
                     clicked => Msg::Decrement,
                     label: "Calculate spanning",
                 },
-                #[name="graph"]
-                GraphWidget {},
+                gtk::Box {
+                    orientation: Horizontal, 
+                    hexpand: true,
+                    vexpand: true,
+                    #[name="graph"]
+                    GraphWidget((self.model.problem.clone(), self.model.graph.clone())),
+                    #[name="constraints"]
+                    ConstraintsWidget(((&self.model.problem).clone(), (&self.model.graph).clone()))
+                }
             },
             // Use a tuple when you want to both send a message and return a value to
             // the GTK+ callback.
