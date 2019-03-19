@@ -21,7 +21,7 @@ use relm::{Relm, Update, Widget, WidgetTest, ContainerWidget};
 
 mod widget_graph;
 
-/*
+
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -30,23 +30,45 @@ pub enum Msg {
 }
 
 pub struct Model {
-    counter: i32,
+    counter: u32,
+    graph: LinkedGraph<ProblemNode>,
+    problem: Problem,
 }
 
 #[widget]
 impl Widget for Win {
+
+    
     fn model() -> Model {
+        let path = "bench_la02.txt";
+        let problem = Problem::read(path).unwrap();
+        let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;        
         Model {
             counter: 0,
+            problem, graph
         }
+    }
+
+    fn init_view(&mut self) {
+        self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
     }
 
     fn update(&mut self, event: Msg) {
         match event {
             // A call to self.label1.set_text() is automatically inserted by the
             // attribute every time the model.counter attribute is updated.
-            Msg::Decrement => self.model.counter -= 1,
-            Msg::Increment => self.model.counter += 1,
+            Msg::Decrement => { // Calculate the span
+                let (span, _) = self.model.graph.force_critical_path();
+                self.model.counter = span;
+            },
+            Msg::Increment => { // Do local search
+                let searcher = LocalSearch::new(4000);                
+                let graph = searcher.solve(&self.model.problem);
+                self.model.graph = graph;
+                let (span, _) = self.model.graph.force_critical_path();
+                self.model.counter = span;
+                self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+            },
             Msg::Quit => gtk::main_quit(),
         }
     }
@@ -63,7 +85,7 @@ impl Widget for Win {
                     clicked => Msg::Increment,
                     // Hence, the previous line is equivalent to:
                     // clicked(_) => Increment,
-                    label: "+",
+                    label: "Do localsearch",
                 },
                 gtk::Label {
                     // Bind the text property of this Label to the counter attribute
@@ -74,11 +96,10 @@ impl Widget for Win {
                 },
                 gtk::Button {
                     clicked => Msg::Decrement,
-                    label: "-",
+                    label: "Calculate spanning",
                 },
-                GraphWidget {
-
-                },
+                #[name="graph"]
+                GraphWidget {},
             },
             // Use a tuple when you want to both send a message and return a value to
             // the GTK+ callback.
@@ -90,22 +111,20 @@ impl Widget for Win {
 fn main() {
     Win::run(()).unwrap();
 }
-*/
 
-fn main() {
 
-    println!("Starting");
+// fn main() {
+
+//     println!("Starting");
     
-    let path = "bench_la02.txt";
+//     let path = "bench_la02.txt";
 
-    let problem = Problem::read(path).unwrap();
-    graph_tests(problem);
+//     let problem = Problem::read(path).unwrap();
+//     graph_tests(problem);
 
-    let problem = Problem::read(path).unwrap();
-    do_local_search(problem);
-
-    
-}
+//     let problem = Problem::read(path).unwrap();
+//     do_local_search(problem);  
+//}
 
 fn do_local_search(problem: Problem) {
     let ls = LocalSearch::new(4000);
