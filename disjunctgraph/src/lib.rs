@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-mod matrix_graph;
 mod linked_graph;
 
 pub use linked_graph::LinkedGraph;
