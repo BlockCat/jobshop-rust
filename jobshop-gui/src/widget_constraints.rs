@@ -12,7 +12,7 @@ use gtk::{
     Inhibit,
     WidgetExt,
 };
-use rand::Rng;
+
 use relm::{
     DrawHandler,
     Relm,
@@ -24,7 +24,6 @@ use relm_attributes::widget;
 
 use self::ConstraintsMsg::*;
 
-const SIZE: f64 = 15.0;
 
 pub struct Model {
     draw_handler: DrawHandler<DrawingArea>,    

@@ -11,7 +11,7 @@ use gtk::{
     Inhibit,
     WidgetExt,
 };
-use rand::Rng;
+
 use relm::{
     DrawHandler,
     Relm,
@@ -22,8 +22,6 @@ use relm::{
 use relm_attributes::widget;
 
 use self::GraphMsg::*;
-
-const SIZE: f64 = 15.0;
 
 pub struct Model {
     draw_handler: DrawHandler<DrawingArea>,    
@@ -68,15 +66,13 @@ impl Widget for GraphWidget {
         let problem: &Problem = &self.model.problem;
         let graph: &LinkedGraph<ProblemNode> = &self.model.graph;
 
-        let machine_count = problem.machines; 
         let job_count = problem.jobs.len(); // There will be this many 'lanes'
-        let max_activities = problem.jobs.iter().map(|x| x.len()).max().unwrap(); // This is the max length
+        let max_activities = problem.jobs.iter().map(|x| x.len()).max().unwrap_or(0); // This is the max length
 
         let height_buffer = allocation.height as f64 / (job_count + 1) as f64;
         let width_buffer = allocation.width as f64 / (max_activities + 1) as f64;
         let x_offset = width_buffer;
-        let y_offset = height_buffer;                    
-        let max_width = max_activities as f64 * width_buffer;
+        let y_offset = height_buffer;        
         let circle_size = 15.0;
 
         // Map activities to locations [(f32, f32)]                    
@@ -201,7 +197,7 @@ impl Widget for GraphWidget {
 
         // Draw nodes
         context.set_antialias(cairo::Antialias::Good);
-        for (k, node) in activity_locations.iter().enumerate() {
+        for node in activity_locations.iter() {
             context.set_source_rgb(node.colour.red, node.colour.green, node.colour.blue);
             context.arc(node.location.0, node.location.1, circle_size, 0.0, 2.0 * PI);
             context.fill();

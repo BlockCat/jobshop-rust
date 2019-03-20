@@ -43,7 +43,7 @@ impl Widget for Win {
 
     fn model() -> Model {
         let path = "bench_la02.txt";
-        let problem = Problem::read(path).unwrap();
+        let problem = Problem::read(path).expect("Could not find path");
         let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;        
         Model {
             counter: 0,
@@ -56,8 +56,10 @@ impl Widget for Win {
             // A call to self.label1.set_text() is automatically inserted by the
             // attribute every time the model.counter attribute is updated.
             Msg::Decrement => { // Calculate the span
-                let (span, _) = self.model.graph.force_critical_path();
-                self.model.counter = span;
+                match self.model.graph.critical_path() {
+                    Ok((span, _)) => self.model.counter = span,
+                    Err(_) => ()
+                }
             },
             Msg::Increment => { // Do local search
                 use std::time;
@@ -67,9 +69,9 @@ impl Widget for Win {
                 let end = time::Instant::now();
 
                 println!("Timer: {:?}", end - timer);
-                 
+
                 self.model.graph = graph;
-                let (span, _) = self.model.graph.force_critical_path();
+                let (span, _) = self.model.graph.critical_path().expect("Graph is not directed for some reason");
                 self.model.counter = span;
                 
                 self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
@@ -123,7 +125,7 @@ impl Widget for Win {
 }
 
 fn main() {
-    Win::run(()).unwrap();
+    Win::run(()).expect("Could not start window");
 }
 
 
@@ -140,35 +142,35 @@ fn main() {
 //     do_local_search(problem);  
 //}
 
-fn do_local_search(problem: Problem) {
-    let ls = LocalSearch::new(4000);
+// fn do_local_search(problem: Problem) {
+//     let ls = LocalSearch::new(4000);
 
-    let graph = ls.solve(&problem);
+//     let graph = ls.solve(&problem);
 
-    let (span, _) = graph.force_critical_path();
-    let schedule = Schedule::from_graph(problem, graph);
+//     let (span, _) = graph.critical_path().unwrap();
+//     let schedule = Schedule::from_graph(problem, graph);
 
-    println!("Schedule: {:?}", schedule);
-    println!("with span: {}", span);
-}
+//     println!("Schedule: {:?}", schedule);
+//     println!("with span: {}", span);
+// }
 
-fn graph_tests(problem: Problem) {    
-    let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;
-    let graph = graph.into_directed().unwrap();
-    let (span, _) = graph.force_critical_path();
-    let schedule = Schedule::from_graph(problem, graph);
+// fn graph_tests(problem: Problem) {    
+//     let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;
+//     let graph = graph.into_directed().unwrap();
+//     let (span, _) = graph.critical_path().unwrap();
+//     let schedule = Schedule::from_graph(problem, graph);
 
-    println!("Schedule: {:?}", schedule);
-    println!("with span: {}", span);
-    println!("-----------");
-}
+//     println!("Schedule: {:?}", schedule);
+//     println!("with span: {}", span);
+//     println!("-----------");
+// }
 
-fn fix_graph(graph: LinkedGraph<ProblemNode>) -> Result<LinkedGraph<ProblemNode>, disjunctgraph::GraphError> {
-        graph.fix_disjunction(&4, &8)?
-            .fix_disjunction(&1, &7)?
-            .fix_disjunction(&6, &2)?
-            .fix_disjunction(&6, &5)?
-            .fix_disjunction(&2, &5)?
-            .fix_disjunction(&4, &3)?
-            .fix_disjunction(&8, &3)
-}
+// fn fix_graph(graph: LinkedGraph<ProblemNode>) -> Result<LinkedGraph<ProblemNode>, disjunctgraph::GraphError> {
+//         graph.fix_disjunction(&4, &8)?
+//             .fix_disjunction(&1, &7)?
+//             .fix_disjunction(&6, &2)?
+//             .fix_disjunction(&6, &5)?
+//             .fix_disjunction(&2, &5)?
+//             .fix_disjunction(&4, &3)?
+//             .fix_disjunction(&8, &3)
+// }

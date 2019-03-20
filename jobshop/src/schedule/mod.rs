@@ -27,36 +27,36 @@ impl Schedule {
 
     pub fn from_graph<I: Graph<ProblemNode>>(problem: Problem, graph: I) -> Schedule {
         use std::collections::VecDeque;
-        
-        // Use shortest path algorithm (modified)
-        // with negative edges
-        let source = graph.source().id();
-        
-        let mut processed = vec!(0u32; graph.nodes().len());        
-        let mut stack: VecDeque<usize> = VecDeque::new();
-        //stack.push_back(source);
-        stack.extend(graph.successors(&source).iter().map(|x| x.id()));
 
-        while !stack.is_empty() {
-            let current_node = stack.pop_front().unwrap();
-            let weight = graph.nodes()[current_node].weight();
+        let topology = graph.topology();
+        let mut nodes = (0..graph.nodes().len()).collect::<Vec<usize>>();
+        nodes.sort_by_key(|x| std::cmp::Reverse(topology[*x]));
 
-            for successor in graph.successors(&current_node) {
-                let successor = successor.id();
-                if processed[successor] < processed[current_node] + weight {
-                    processed[successor] = processed[current_node] + weight;                    
-                    stack.push_back(successor);
-                }
+        // Starting with the node with the highest topology, the source...
+        let mut starting_times = vec!(0u32; nodes.len());
+        let mut backtracker = vec!(0usize; nodes.len());
+
+        for node in nodes {
+            let predecessors = graph.predecessors(&node);
+
+            let nodes = graph.nodes();
+            let max_predecessor = predecessors.iter()                
+                .map(|x| (x.id(), starting_times[x.id()] + nodes[x.id()].weight()))
+                .max_by_key(|x| x.1);
+
+            if let Some(max_predecessor) = max_predecessor {
+                backtracker[node] = max_predecessor.0;
+                starting_times[node] = max_predecessor.1;
             }
         }
         
-        println!("Criticals: {:?}", processed.last().unwrap());
+        
         let jobs = problem.jobs.clone();
         let activities = problem.activities.into_iter().enumerate()
             .map(|(i, activity)| {
                 ScheduledActivity {
                     activity,
-                    starting_time: processed[i + 1]
+                    starting_time: starting_times[i + 1]
                 }
             });
 

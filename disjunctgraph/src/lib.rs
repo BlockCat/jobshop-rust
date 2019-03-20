@@ -41,40 +41,79 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
     fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
 
-    fn critical_path(&self) -> std::result::Result<(u32, Vec<&T>), GraphError> {        
-        if self.is_cyclic() {
-            Err(GraphError::Cyclic)
-        } else {
-            Ok(self.force_critical_path())
-        }
-    }
-
-    fn force_critical_path(&self) -> (u32, Vec<&T>) {
+    fn topology(&self) -> Vec<u16> {
         use std::collections::VecDeque;
-        // Use shortest path algorithm (modified)
-        // with negative edges
-        let source = self.source().id();
+        // Start DFS from source
+        let source = self.source();
 
-        let mut processed = vec!(0u32; self.nodes().len());
-        let mut backtracker = vec!(0usize; self.nodes().len());
-        let mut stack: VecDeque<usize> = VecDeque::new();
-        //stack.push_back(source);
-        stack.extend(self.successors(&source).iter().map(|x| x.id()));
+        let mut processed = vec!(0u16; self.nodes().len());
+        let mut in_stack = vec!(false; self.nodes().len());
 
-        while !stack.is_empty() {
-            let current_node = stack.pop_front().unwrap();
-            let weight = self.nodes()[current_node].weight();            
+        // Create a topology ordering in O(V + E)
+        // postorder
+        // Without recursion:
+        // Add the node in the stack as visited, then add children.
+        // Once children are done the node will be visited again postorder action is taken.
+        // To prevent loops, the node will only be handled if it doesn't have a topology order and it's not in the stack.
 
-            for successor in self.successors(&current_node) {
-                let successor = successor.id();                
-                if processed[successor] <= processed[current_node] + weight {
-                    processed[successor] = processed[current_node] + weight;
-                    backtracker[successor] = current_node;
-                    stack.push_back(successor);
+        enum Status { Visisted(usize), Unvisited(usize) };
+        let mut stack: VecDeque<Status> = VecDeque::with_capacity(processed.len() / 4);
+
+        stack.push_back(Status::Unvisited(source.id()));
+        let mut counter = 1;
+
+        while !stack.is_empty() {            
+            let current_node = stack.pop_back().unwrap();
+
+            match current_node {
+                Status::Unvisited(current_node) => {
+                    if processed[current_node] == 0 && !in_stack[current_node] {                        
+                        stack.push_back(Status::Visisted(current_node));                        
+                        stack.extend(self.successors(&current_node).iter().map(|x| Status::Unvisited(x.id())));
+                        in_stack[current_node] = true;
+                    }
+                },
+                Status::Visisted(current_node) => {
+                    if processed[current_node] == 0 {
+                        processed[current_node] = counter;
+                        in_stack[current_node] = false;
+
+                        counter += 1;
+                    }
                 }
             }
         }
+        processed
+    }
 
+    fn critical_path(&self) -> std::result::Result<(u32, Vec<&T>), GraphError> {
+        let topology = self.topology();
+
+        let mut nodes = (0..self.nodes().len()).collect::<Vec<usize>>();
+        nodes.sort_by_key(|x| std::cmp::Reverse(topology[*x]));
+        // Starting with the node with the highest topology, the source...
+        let mut starting_times = vec!(0u32; self.nodes().len());
+        let mut backtracker = vec!(0usize; self.nodes().len());
+
+        for node in nodes {
+            let predecessors = self.predecessors(&node);
+            let any_predecessor_smaller = predecessors.iter().any(|x| topology[x.id()] < topology[node] );                        
+            if any_predecessor_smaller {
+                return Err(GraphError::Cyclic);
+            }
+
+            let nodes = self.nodes();            
+            let max_predecessor = predecessors.iter()                
+                .map(|x| (x.id(), starting_times[x.id()] + nodes[x.id()].weight()))                
+                .max_by_key(|x| x.1);
+
+            if let Some(max_predecessor) = max_predecessor {                 
+                backtracker[node] = max_predecessor.0;
+                starting_times[node] = max_predecessor.1;
+            }            
+        }
+
+        let max_span = starting_times.last().unwrap();
         let mut path = Vec::new();
         let mut pointer = backtracker[self.sink().id()];
         while pointer != 0 {
@@ -84,10 +123,7 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
             pointer = prev;
         }
         path.reverse();
-        //println!("Backtrack: {:?}", path.iter().map(|x| x.id()).collect::<Vec<_>>());
-        //println!("Criticals: {:?}", processed.last().unwrap());
-        
-        (*processed.last().unwrap(), path)
+        Ok((*max_span, path))
     }
 
     fn is_cyclic(&self) -> bool {

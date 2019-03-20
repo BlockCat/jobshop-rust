@@ -36,7 +36,7 @@ impl ProblemSolver for LocalSearch {
 
             counter += 1;
 
-            let (critical_length, critical_path) = graph.force_critical_path();            
+            let (critical_length, critical_path) = graph.critical_path().expect("Cyclic graph");
             let temperature = self.temperature / counter; // -T ln u (u \in Normal(1,0), T decreases)
             
             // Find multiple candidate switches
@@ -57,7 +57,7 @@ impl ProblemSolver for LocalSearch {
 
             for (a, b) in candidates {
                 let candidate_graph = graph.flip_edge(&a, &b).expect("Could not flip edge.");
-                let (candidate_length, _) = candidate_graph.force_critical_path();
+                let (candidate_length, _) = candidate_graph.critical_path().unwrap();
 
                 if candidate_length < critical_length + temperature {
                     graph = candidate_graph;
