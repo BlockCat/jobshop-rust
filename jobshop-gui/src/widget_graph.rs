@@ -130,6 +130,9 @@ impl Widget for GraphWidget {
 
         // Draw disjunctions
         context.set_source_rgb(0.1, 0.1, 0.1);
+        context.set_antialias(cairo::Antialias::Fast);
+        context.set_line_width(1.0);
+        context.set_dash(&[1.0], 2.0);
         for activity in graph.nodes().iter() {
             let disjuctions = graph.disjunctions(activity);
             let id = activity.id();
@@ -137,9 +140,10 @@ impl Widget for GraphWidget {
             for other in disjuctions {
                 let other = other.id();
                 if other > id {
+                    let colour = &activity_locations[id].colour;
                     let a = &activity_locations[id].location;
                     let b = &activity_locations[other].location;
-
+                    context.set_source_rgb(colour.red, colour.green, colour.blue);
                     context.move_to(a.0, a.1);
                     context.line_to(b.0, b.1);
                     context.stroke();
@@ -149,6 +153,9 @@ impl Widget for GraphWidget {
 
         // Draw arcs
         context.set_source_rgb(0.5, 0.6, 0.8);
+        context.set_antialias(cairo::Antialias::Default);
+        context.set_line_width(1.8);
+        context.set_dash(&[], 0.0);
         for activity in graph.nodes().iter() {
             let successors = graph.successors(activity);                        
 
@@ -193,6 +200,7 @@ impl Widget for GraphWidget {
         }
 
         // Draw nodes
+        context.set_antialias(cairo::Antialias::Good);
         for (k, node) in activity_locations.iter().enumerate() {
             context.set_source_rgb(node.colour.red, node.colour.green, node.colour.blue);
             context.arc(node.location.0, node.location.1, circle_size, 0.0, 2.0 * PI);

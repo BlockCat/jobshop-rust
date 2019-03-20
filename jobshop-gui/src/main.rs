@@ -60,8 +60,14 @@ impl Widget for Win {
                 self.model.counter = span;
             },
             Msg::Increment => { // Do local search
+                use std::time;
+                let timer = time::Instant::now();
                 let searcher = LocalSearch::new(4000);                
                 let graph = searcher.solve(&self.model.problem);
+                let end = time::Instant::now();
+
+                println!("Timer: {:?}", end - timer);
+                 
                 self.model.graph = graph;
                 let (span, _) = self.model.graph.force_critical_path();
                 self.model.counter = span;

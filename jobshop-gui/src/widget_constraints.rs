@@ -66,25 +66,43 @@ impl Widget for ConstraintsWidget {
     
         let problem: &Problem = &self.model.problem;
         let graph: &LinkedGraph<ProblemNode> = &self.model.graph;
-        let schedule = Schedule::from_graph(problem.clone(), graph.clone());
-        let max_constraint = 23;
+        let schedule = Schedule::from_graph(problem.clone(), graph.clone());       
 
+        let upper_bound = 1000.0;
         let y_axis = 15.0;
         let x_axis = 15.0;
 
+        let height = allocation.height as f64 / (problem.activities.len() + 2) as f64;
+        
+        let width = allocation.width as f64 - x_axis;
+        let horizontal_scale = width / upper_bound; 
+
         // Draw y-axis
+        context.set_source_rgb(0.0, 0.0, 0.0);
+        context.set_line_width(2.0);
         context.move_to(x_axis, y_axis);
         context.line_to(x_axis, allocation.height as f64);
         context.stroke();
+
+        context.set_source_rgb(0.0, 0.0, 0.0);
+        context.set_line_width(0.1);
+        //context.set_dash(&[2.0], 2.0);
+        let lines = 20.0;
+        for i in 0..(upper_bound / lines) as u32 {
+            let x_axis = x_axis + lines * horizontal_scale * i as f64;
+            context.move_to(x_axis, y_axis);
+            context.line_to(x_axis, allocation.height as f64);
+            context.stroke();
+        }
+
+        context.set_source_rgb(0.0, 0.0, 0.0);
+        context.set_line_width(2.0);
+        context.set_dash(&[], 0.0);
         // Draw x-axis
         context.move_to(x_axis, y_axis);
         context.line_to(allocation.width as f64, y_axis);
         context.stroke();
         
-        let height = allocation.height as f64 / (problem.activities.len() + 2) as f64;
-        let upper_bound = 1000.0;
-        let width = allocation.width as f64 - x_axis;
-        let horizontal_scale = width / upper_bound; 
 
         for (k, activity) in schedule.activities.iter().enumerate() {
             let early_start = activity.starting_time;
