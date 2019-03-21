@@ -1,6 +1,5 @@
 use jobshop::problem::{ Problem, ProblemNode };
-use jobshop::schedule::Schedule;
-use disjunctgraph::LinkedGraph;
+use jobshop::constraints::*;
 
 use cairo::Context;
 use gtk::{
@@ -22,13 +21,13 @@ use self::ConstraintsMsg::*;
 
 pub struct Model {
     draw_handler: DrawHandler<DrawingArea>,    
-    graph: LinkedGraph<ProblemNode>,
+    constraints: ProblemConstraints,
     problem: Problem,
 }
 
 #[derive(Msg, Debug)]
 pub enum ConstraintsMsg {
-    SetProblem((Problem, LinkedGraph<ProblemNode>)),
+    SetProblem((Problem, ProblemConstraints)),
     UpdateDrawBuffer,
 }
 
@@ -43,10 +42,10 @@ impl Widget for ConstraintsWidget {
 
     }
 
-    fn model(_: &Relm<Self>, (problem, graph): (Problem, LinkedGraph<ProblemNode>)) -> Model {
+    fn model(_: &Relm<Self>, (problem, constraints): (Problem, ProblemConstraints)) -> Model {
         Model {
             draw_handler: DrawHandler::new().expect("draw handler"),            
-            graph, problem,
+            constraints, problem,
         }
     }
 
@@ -59,10 +58,9 @@ impl Widget for ConstraintsWidget {
         let allocation = self.drawing_area.get_allocation();
     
         let problem: &Problem = &self.model.problem;
-        let graph: &LinkedGraph<ProblemNode> = &self.model.graph;
-        let schedule = Schedule::from_graph(problem.clone(), graph.clone());       
+        let constraints: &ProblemConstraints = &self.model.constraints;        
 
-        let upper_bound = 1000.0;
+        let upper_bound = constraints.upper_bound as f64;
         let y_axis = 15.0;
         let x_axis = 15.0;
 
@@ -78,12 +76,12 @@ impl Widget for ConstraintsWidget {
         context.line_to(x_axis, allocation.height as f64);
         context.stroke();
 
-        context.set_source_rgb(0.0, 0.0, 0.0);
-        context.set_line_width(0.1);
+        context.set_source_rgb(0.5, 0.5, 0.5);
+        context.set_line_width(0.2);
         //context.set_dash(&[2.0], 2.0);
-        let lines = 20.0;
-        for i in 0..(upper_bound / lines) as u32 {
-            let x_axis = x_axis + lines * horizontal_scale * i as f64;
+        let lines = upper_bound;
+        for i in 0..(lines) as u32 {
+            let x_axis = 5.0 + x_axis + horizontal_scale * i as f64;
             context.move_to(x_axis, y_axis);
             context.line_to(x_axis, allocation.height as f64);
             context.stroke();
@@ -98,12 +96,14 @@ impl Widget for ConstraintsWidget {
         context.stroke();
         
 
-        for (k, activity) in schedule.activities.iter().enumerate() {
-            let early_start = activity.starting_time;
-            let early_end = early_start + activity.activity.process_time;
-            let late_start = early_start + 3;
-            let late_end = early_end + 9;
-            ConstraintsWidget::draw_bar(x_axis + 5.0, horizontal_scale, height, y_axis + height + k as f64 * (height + 5.0), early_start, early_end, late_start, late_end, context);
+        for (k, activity) in problem.activities.iter().enumerate() {
+            let constraint = &constraints.constraints[k + 1];
+            let early_start = constraint.left_bound;
+            let early_end = early_start + activity.process_time;
+            let late_end = constraint.right_bound;
+            let late_start = late_end - activity.process_time;
+            
+            ConstraintsWidget::draw_bar(x_axis + 5.0, horizontal_scale, height, y_axis + height + k as f64 * (height + 0.0), early_start, early_end, late_start, late_end, context);
         }
     }
 
@@ -116,11 +116,11 @@ impl Widget for ConstraintsWidget {
 
         context.set_source_rgb(1.0, 0.1, 0.1);
         context.rectangle(x_offset + early_start, y - height * 0.5, early_end - early_start, height);
-        context.fill();
+        context.stroke();
 
         context.set_source_rgb(0.1, 0.1, 1.0);
-        context.rectangle(x_offset + late_start, y - height * 0.4, late_end - late_start, height * 0.8);
-        context.fill();
+        context.rectangle(x_offset + late_start, y - height * 0.5, late_end - late_start, height);
+        context.stroke();
 
         context.set_source_rgb(0.0, 0.0, 0.0);
         context.move_to(x_offset + early_start, y);
@@ -130,8 +130,8 @@ impl Widget for ConstraintsWidget {
 
     fn update(&mut self, event: ConstraintsMsg) {        
         match event {
-            SetProblem((problem, graph)) => {
-                self.model.graph = graph;
+            SetProblem((problem, constraints)) => {
+                self.model.constraints = constraints;
                 self.model.problem = problem;
                 let context = self.model.draw_handler.get_context();
                 self.draw(&context);

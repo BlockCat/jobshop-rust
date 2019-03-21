@@ -108,7 +108,7 @@ impl Widget for GraphWidget {
                 };
                 Node {
                     location: (x_offset + id as f64 * width_buffer, y),
-                    label: format!("{}", x.id()),
+                    label: format!("{}", x + 1),
                     colour: colour
                 }
                 

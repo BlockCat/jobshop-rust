@@ -11,8 +11,9 @@ use relm_attributes::widget;
 
 use disjunctgraph::{ Graph, LinkedGraph };
 use jobshop::problem::*;
-
 use jobshop::local_search::LocalSearch;
+use jobshop::constraints::*;
+
 use widget_graph::*;
 use widget_constraints::*;
 
@@ -23,11 +24,13 @@ use relm::Widget;
 mod widget_graph;
 mod widget_constraints;
 
+const UPPER: u32 = 13;
 
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
     Increment,
+    Fix,
     Quit,
 }
 
@@ -41,7 +44,7 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_la02.txt";
+        let path = "bench_test.txt";
         let problem = Problem::read(path).expect("Could not find path");
         let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;        
         Model {
@@ -74,8 +77,33 @@ impl Widget for Win {
                 self.model.counter = span;
                 
                 self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
-                self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+                self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), ProblemConstraints::new(&self.model.graph, span).unwrap())));
 
+            },
+            Msg::Fix => {                
+                if let Some(input) = self.fixer.get_text() {
+                    let split = input.to_string();
+                    let mut split = split.split(",");
+                    let first = split.next().and_then(|x| x.parse::<usize>().ok());
+                    let second = split.next().and_then(|x| x.parse::<usize>().ok());
+                    println!("{:?}->{:?}", first, second);
+                    if let (Some(first), Some(second)) = (first, second) {
+                        let constraints = ProblemConstraints::new(&self.model.graph, UPPER).unwrap();
+                        let node_1 = &self.model.graph.nodes()[first];
+                        let node_2 = &self.model.graph.nodes()[second];
+                        if constraints.check_precedence(node_1, node_2) {                             
+                            
+                            let graph = self.model.graph.fix_disjunction(node_1, node_2).expect("not cyclic");
+                            let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
+
+                            self.model.graph = graph;
+                            self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+                            self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), constraints)));
+                        } else {
+                            println!("Leads to infeasible solution");
+                        }
+                    }                    
+                }
             },
             Msg::Quit => gtk::main_quit(),
         }
@@ -110,10 +138,23 @@ impl Widget for Win {
                     orientation: Horizontal, 
                     hexpand: true,
                     vexpand: true,
+                    gtk::Box {
+                        orientation: Vertical,
+                        gtk::Label {
+                            text: "Enter which edge to fix"
+                        },
+                        #[name="fixer"]
+                        gtk::Entry {},
+                        gtk::Button {
+                            clicked => Msg::Fix,
+                            label: "Fix it"
+                        }
+                    },
+        
                     #[name="graph"]
                     GraphWidget((self.model.problem.clone(), self.model.graph.clone())),
                     #[name="constraints"]
-                    ConstraintsWidget(((&self.model.problem).clone(), (&self.model.graph).clone()))
+                    ConstraintsWidget(((&self.model.problem).clone(), ProblemConstraints::new(&self.model.graph, UPPER).unwrap()))
                 }
             },
             // Use a tuple when you want to both send a message and return a value to

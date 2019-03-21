@@ -1,0 +1,15 @@
+onderzoeksvragen
+motivatie
+literatuurstudie
+planning !@!@#$@%
+
+
+13.26.24.29.42.43.47.54.115.127.123.130.134
+
+
+CP event propagation
+EVENT:
+- RANGE CHANGE    
+    - possible PRECEDENCE CHANGE on disjunctions
+- PRECEDENCE CHANGES
+    - possible RANGE CHANGE max(current-head, newprecedence-head + p)
