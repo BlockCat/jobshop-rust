@@ -11,7 +11,6 @@ use relm_attributes::widget;
 
 use disjunctgraph::{ Graph, LinkedGraph };
 use jobshop::problem::*;
-use jobshop::schedule::Schedule;
 
 use jobshop::local_search::LocalSearch;
 use widget_graph::*;
@@ -19,7 +18,7 @@ use widget_constraints::*;
 
 use gtk::prelude::*;
 use gtk::Orientation::{ Vertical, Horizontal };
-use relm::{Relm, Update, Widget, WidgetTest, ContainerWidget};
+use relm::Widget;
 
 mod widget_graph;
 mod widget_constraints;

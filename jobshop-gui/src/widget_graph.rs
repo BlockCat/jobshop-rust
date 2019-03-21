@@ -1,14 +1,13 @@
 use std::f64::consts::PI;
 
 use jobshop::problem::{ Problem, ProblemNode };
-use disjunctgraph::{ LinkedGraph, Graph, NodeId, GraphNode };
+use disjunctgraph::{ LinkedGraph, Graph, NodeId };
 
-use gdk::{EventMask, RGBA};
+use gdk::RGBA;
 use cairo::Context;
 use gtk::{
     BoxExt,
     DrawingArea,
-    Inhibit,
     WidgetExt,
 };
 
@@ -16,7 +15,6 @@ use relm::{
     DrawHandler,
     Relm,
     Widget,
-    interval,
 };
 
 use relm_attributes::widget;
@@ -148,8 +146,8 @@ impl Widget for GraphWidget {
         }
 
         // Draw arcs
-        context.set_source_rgb(0.5, 0.6, 0.8);
-        context.set_antialias(cairo::Antialias::Default);
+        context.set_source_rgb(0.2, 0.2, 0.2);
+        context.set_antialias(cairo::Antialias::Fast);
         context.set_line_width(1.8);
         context.set_dash(&[], 0.0);
         for activity in graph.nodes().iter() {
@@ -164,14 +162,14 @@ impl Widget for GraphWidget {
                 let normalized = (normalized.0 / length, normalized.1 / length);
 
                 let rot_1 = {
-                    let angle = 0.5f64;
+                    let angle = 0.7f64;
                     let sin = angle.sin();
                     let cos = angle.cos();
 
                     (normalized.0 * cos - normalized.1 * sin, normalized.0 * sin + normalized.1 * cos)
                 };
                 let rot_2 = {
-                    let angle = -0.5f64;
+                    let angle = -0.7f64;
                     let sin = angle.sin();
                     let cos = angle.cos();
 
@@ -179,12 +177,12 @@ impl Widget for GraphWidget {
                 };
                 let b = (b.0 - normalized.0 * circle_size, b.1 - normalized.1 * circle_size);
 
-                context.move_to(b.0, b.1);
-                context.line_to(b.0 - circle_size * rot_1.0, b.1 - circle_size * rot_1.1);
-                context.stroke();
-                context.move_to(b.0, b.1);
-                context.line_to(b.0 - circle_size * rot_2.0, b.1 - circle_size * rot_2.1);
-                context.stroke();
+                //Draw arrow
+                context.move_to(b.0 - circle_size * rot_1.0 * 0.4, b.1 - circle_size * rot_1.1 * 0.4);
+                context.line_to(b.0, b.1);                
+                context.line_to(b.0 - circle_size * rot_2.0 * 0.4, b.1 - circle_size * rot_2.1 * 0.4);
+                context.close_path();
+                context.fill();
 
                 context.move_to(a.0, a.1);
                 context.line_to(b.0, b.1);
@@ -203,7 +201,7 @@ impl Widget for GraphWidget {
             context.fill();
 
             context.set_source_rgb(1.0, 1.0, 1.0);
-            context.move_to(node.location.0, node.location.1);
+            context.move_to(node.location.0 - 3.0, node.location.1);
             context.show_text(&node.label);
         }
     }

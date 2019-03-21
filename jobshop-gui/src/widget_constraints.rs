@@ -1,15 +1,11 @@
-use std::f64::consts::PI;
-
 use jobshop::problem::{ Problem, ProblemNode };
 use jobshop::schedule::Schedule;
-use disjunctgraph::{ LinkedGraph, Graph, NodeId, GraphNode };
+use disjunctgraph::LinkedGraph;
 
-use gdk::{EventMask, RGBA};
 use cairo::Context;
 use gtk::{
     BoxExt,
-    DrawingArea,
-    Inhibit,
+    DrawingArea,    
     WidgetExt,
 };
 
@@ -17,7 +13,6 @@ use relm::{
     DrawHandler,
     Relm,
     Widget,
-    interval,
 };
 
 use relm_attributes::widget;
