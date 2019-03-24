@@ -49,8 +49,8 @@ impl Widget for ConstraintsWidget {
         }
     }
 
-    fn draw(&self, context: &Context) {        
-        
+    fn draw(&self, context: &Context) {
+        use cairo::PatternTrait;
         // Graph is drawn from left to right (horizontal)
         context.set_source_rgb(1.0, 1.0, 1.0);
         context.paint();                
@@ -95,7 +95,37 @@ impl Widget for ConstraintsWidget {
         context.line_to(allocation.width as f64, y_axis);
         context.stroke();
         
+        let pattern_1 = {
+            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
+            let context = Context::new(&surface);
 
+            context.set_source_rgb(0.0, 0.0, 0.0);
+            context.set_line_width(0.5);
+            context.move_to(0.0, 0.0);
+            context.line_to(4.0, 4.0);
+            context.stroke();
+
+            let pattern = cairo::Pattern::SurfacePattern(cairo::SurfacePattern::create(&surface));
+            pattern.set_extend(cairo::Extend::Repeat);
+
+            pattern
+        };
+
+        let pattern_2 = {
+            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 4, 4).unwrap();
+            let context = Context::new(&surface);
+
+            context.set_source_rgb(0.0, 0.0, 0.0);
+            context.set_line_width(0.5);
+            context.move_to(4.0, 0.0);
+            context.line_to(0.0, 4.0);
+            context.stroke();
+
+            let pattern = cairo::Pattern::SurfacePattern(cairo::SurfacePattern::create(&surface));
+            pattern.set_extend(cairo::Extend::Repeat);
+
+            pattern
+        };
         for (k, activity) in problem.activities.iter().enumerate() {
             let constraint = &constraints.constraints[k + 1];
             let early_start = constraint.left_bound;
@@ -103,24 +133,46 @@ impl Widget for ConstraintsWidget {
             let late_end = constraint.right_bound;
             let late_start = late_end - activity.process_time;
             
-            ConstraintsWidget::draw_bar(x_axis + 5.0, horizontal_scale, height, y_axis + height + k as f64 * (height + 0.0), early_start, early_end, late_start, late_end, context);
+            ConstraintsWidget::draw_bar(x_axis + 5.0, horizontal_scale, height, y_axis + height + k as f64 * (height + 0.0), early_start, early_end, late_start, late_end, &pattern_1, &pattern_2, context);
         }
     }
 
     /// Draw a constraint bar
-    fn draw_bar(x_offset: f64, horizontal_scale: f64, height: f64, y: f64, early_start: u32, early_end: u32, late_start: u32, late_end: u32, context: &Context) {
+    fn draw_bar(x_offset: f64, horizontal_scale: f64, height: f64, y: f64, early_start: u32, early_end: u32, late_start: u32, late_end: u32, pattern_1: &cairo::Pattern, pattern_2: &cairo::Pattern, context: &Context) {
+        
+        
+
         let early_start = early_start as f64 * horizontal_scale;
         let early_end = early_end as f64 * horizontal_scale;
         let late_start = late_start as f64 * horizontal_scale;
         let late_end = late_end as f64 * horizontal_scale;
 
-        context.set_source_rgb(1.0, 0.1, 0.1);
+        // Draw earliest box
+        // -------------------------------
+        // draw pattern
+        context.set_source(&pattern_1);        
+        context.rectangle(x_offset + early_start, y - height * 0.5, early_end - early_start, height);
+        context.fill();
+
+        // draw box
+        context.set_source_rgb(0.0, 0.0, 0.0);
+        context.set_line_width(0.5);
         context.rectangle(x_offset + early_start, y - height * 0.5, early_end - early_start, height);
         context.stroke();
 
-        context.set_source_rgb(0.1, 0.1, 1.0);
+        // Draw latest box
+        // -------------------------------
+        // draw pattern
+        context.set_source(&pattern_2);
+        context.rectangle(x_offset + late_start, y - height * 0.5, late_end - late_start, height);
+        context.fill();
+
+        // draw box
+        context.set_source_rgb(0.0, 0.0, 0.0);
+        context.set_line_width(0.5);
         context.rectangle(x_offset + late_start, y - height * 0.5, late_end - late_start, height);
         context.stroke();
+        // -------------------------------
 
         context.set_source_rgb(0.0, 0.0, 0.0);
         context.move_to(x_offset + early_start, y);

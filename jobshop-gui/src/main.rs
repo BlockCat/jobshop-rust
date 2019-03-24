@@ -11,11 +11,13 @@ use relm_attributes::widget;
 
 use disjunctgraph::{ Graph, LinkedGraph };
 use jobshop::problem::*;
-use jobshop::local_search::LocalSearch;
 use jobshop::constraints::*;
+use jobshop::local_search::LocalSearch;
 
 use widget_graph::*;
 use widget_constraints::*;
+use widget_edge_selection::*;
+use widget_edge_selection::EdgeMsg::Fix as EdgeFix;
 
 use gtk::prelude::*;
 use gtk::Orientation::{ Vertical, Horizontal };
@@ -23,16 +25,18 @@ use relm::Widget;
 
 mod widget_graph;
 mod widget_constraints;
+mod widget_edge_selection;
 
-const UPPER: u32 = 13;
+const UPPER: u32 = 16;
 
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
     Increment,
-    Fix,
+    Fix(usize, usize),
     Quit,
 }
+use Msg::Fix;
 
 pub struct Model {
     counter: u32,
@@ -80,29 +84,20 @@ impl Widget for Win {
                 self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), ProblemConstraints::new(&self.model.graph, span).unwrap())));
 
             },
-            Msg::Fix => {                
-                if let Some(input) = self.fixer.get_text() {
-                    let split = input.to_string();
-                    let mut split = split.split(",");
-                    let first = split.next().and_then(|x| x.parse::<usize>().ok());
-                    let second = split.next().and_then(|x| x.parse::<usize>().ok());
-                    println!("{:?}->{:?}", first, second);
-                    if let (Some(first), Some(second)) = (first, second) {
-                        let constraints = ProblemConstraints::new(&self.model.graph, UPPER).unwrap();
-                        let node_1 = &self.model.graph.nodes()[first];
-                        let node_2 = &self.model.graph.nodes()[second];
-                        if constraints.check_precedence(node_1, node_2) {                             
-                            
-                            let graph = self.model.graph.fix_disjunction(node_1, node_2).expect("not cyclic");
-                            let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
+            Msg::Fix(a, b) => {
+                println!("{:?}->{:?}", a, b);
+                let constraints = ProblemConstraints::new(&self.model.graph, UPPER).unwrap();
+                let node_1 = &self.model.graph.nodes()[a];
+                let node_2 = &self.model.graph.nodes()[b];
+                if constraints.check_precedence(node_1, node_2) {
+                    let graph = self.model.graph.fix_disjunction(node_1, node_2).expect("not cyclic");
+                    let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
 
-                            self.model.graph = graph;
-                            self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
-                            self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), constraints)));
-                        } else {
-                            println!("Leads to infeasible solution");
-                        }
-                    }                    
+                    self.model.graph = graph;
+                    self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+                    self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), constraints)));
+                } else {
+                    println!("Leads to infeasible solution");
                 }
             },
             Msg::Quit => gtk::main_quit(),
@@ -130,9 +125,8 @@ impl Widget for Win {
                     // will be updated too.
                     text: &self.model.counter.to_string(),
                 },
-                gtk::Button {
+                gtk::Button("Calculate spanning") {
                     clicked => Msg::Decrement,
-                    label: "Calculate spanning",
                 },
                 gtk::Box {
                     orientation: Horizontal, 
@@ -143,12 +137,10 @@ impl Widget for Win {
                         gtk::Label {
                             text: "Enter which edge to fix"
                         },
-                        #[name="fixer"]
-                        gtk::Entry {},
-                        gtk::Button {
-                            clicked => Msg::Fix,
-                            label: "Fix it"
-                        }
+                        #[name="edge_selection"]
+                        EdgeSelection(self.model.graph.clone()) {
+                            EdgeFix(a, b) => Fix(a, b),
+                        },
                     },
         
                     #[name="graph"]
@@ -167,43 +159,6 @@ impl Widget for Win {
 fn main() {
     Win::run(()).expect("Could not start window");
 }
-
-
-// fn main() {
-
-//     println!("Starting");
-    
-//     let path = "bench_la02.txt";
-
-//     let problem = Problem::read(path).unwrap();
-//     graph_tests(problem);
-
-//     let problem = Problem::read(path).unwrap();
-//     do_local_search(problem);  
-//}
-
-// fn do_local_search(problem: Problem) {
-//     let ls = LocalSearch::new(4000);
-
-//     let graph = ls.solve(&problem);
-
-//     let (span, _) = graph.critical_path().unwrap();
-//     let schedule = Schedule::from_graph(problem, graph);
-
-//     println!("Schedule: {:?}", schedule);
-//     println!("with span: {}", span);
-// }
-
-// fn graph_tests(problem: Problem) {    
-//     let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;
-//     let graph = graph.into_directed().unwrap();
-//     let (span, _) = graph.critical_path().unwrap();
-//     let schedule = Schedule::from_graph(problem, graph);
-
-//     println!("Schedule: {:?}", schedule);
-//     println!("with span: {}", span);
-//     println!("-----------");
-// }
 
 // fn fix_graph(graph: LinkedGraph<ProblemNode>) -> Result<LinkedGraph<ProblemNode>, disjunctgraph::GraphError> {
 //         graph.fix_disjunction(&4, &8)?
