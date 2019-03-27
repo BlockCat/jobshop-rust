@@ -27,7 +27,7 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 16;
+const UPPER: u32 = 13;
 
 #[derive(Msg)]
 pub enum Msg {
@@ -125,8 +125,9 @@ impl Widget for Win {
                     // will be updated too.
                     text: &self.model.counter.to_string(),
                 },
-                gtk::Button("Calculate spanning") {
+                gtk::Button {
                     clicked => Msg::Decrement,
+                    label: "Calculate spanning"
                 },
                 gtk::Box {
                     orientation: Horizontal, 
