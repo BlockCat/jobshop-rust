@@ -1,12 +1,9 @@
-use jobshop::problem::{ Problem, ProblemNode };
+use jobshop::problem::Problem;
 use jobshop::constraints::*;
 
 use cairo::Context;
-use gtk::{
-    BoxExt,
-    DrawingArea,    
-    WidgetExt,
-};
+use gtk::prelude::*;
+use gtk::DrawingArea;    
 
 use relm::{
     DrawHandler,
@@ -64,7 +61,7 @@ impl Widget for ConstraintsWidget {
         let y_axis = 15.0;
         let x_axis = 15.0;
 
-        let height = allocation.height as f64 / (problem.activities.len() + 2) as f64;
+        let height = 10.0;
         
         let width = allocation.width as f64 - x_axis;
         let horizontal_scale = width / upper_bound; 
@@ -79,13 +76,13 @@ impl Widget for ConstraintsWidget {
         context.set_source_rgb(0.5, 0.5, 0.5);
         context.set_line_width(0.2);
         //context.set_dash(&[2.0], 2.0);
-        let lines = upper_bound;
+        /*let lines = 250;
         for i in 0..(lines) as u32 {
             let x_axis = 5.0 + x_axis + horizontal_scale * i as f64;
             context.move_to(x_axis, y_axis);
             context.line_to(x_axis, allocation.height as f64);
             context.stroke();
-        }
+        }*/
 
         context.set_source_rgb(0.0, 0.0, 0.0);
         context.set_line_width(2.0);
@@ -100,7 +97,7 @@ impl Widget for ConstraintsWidget {
             let context = Context::new(&surface);
 
             context.set_source_rgb(0.0, 0.0, 0.0);
-            context.set_line_width(0.5);
+            context.set_line_width(1.0);
             context.move_to(0.0, 0.0);
             context.line_to(4.0, 4.0);
             context.stroke();
@@ -116,7 +113,7 @@ impl Widget for ConstraintsWidget {
             let context = Context::new(&surface);
 
             context.set_source_rgb(0.0, 0.0, 0.0);
-            context.set_line_width(0.5);
+            context.set_line_width(1.0);
             context.move_to(4.0, 0.0);
             context.line_to(0.0, 4.0);
             context.stroke();
@@ -140,23 +137,23 @@ impl Widget for ConstraintsWidget {
     /// Draw a constraint bar
     fn draw_bar(x_offset: f64, horizontal_scale: f64, height: f64, y: f64, early_start: u32, early_end: u32, late_start: u32, late_end: u32, pattern_1: &cairo::Pattern, pattern_2: &cairo::Pattern, context: &Context) {
         
-        
-
         let early_start = early_start as f64 * horizontal_scale;
         let early_end = early_end as f64 * horizontal_scale;
         let late_start = late_start as f64 * horizontal_scale;
         let late_end = late_end as f64 * horizontal_scale;
 
+        context.set_antialias(cairo::Antialias::Gray);
+
         // Draw earliest box
         // -------------------------------
-        // draw pattern
+        // draw pattern        
         context.set_source(&pattern_1);        
         context.rectangle(x_offset + early_start, y - height * 0.5, early_end - early_start, height);
         context.fill();
 
         // draw box
         context.set_source_rgb(0.0, 0.0, 0.0);
-        context.set_line_width(0.5);
+        context.set_line_width(1.0);
         context.rectangle(x_offset + early_start, y - height * 0.5, early_end - early_start, height);
         context.stroke();
 
@@ -169,7 +166,7 @@ impl Widget for ConstraintsWidget {
 
         // draw box
         context.set_source_rgb(0.0, 0.0, 0.0);
-        context.set_line_width(0.5);
+        context.set_line_width(1.0);
         context.rectangle(x_offset + late_start, y - height * 0.5, late_end - late_start, height);
         context.stroke();
         // -------------------------------

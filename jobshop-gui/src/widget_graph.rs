@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
-use jobshop::problem::{ Problem, ProblemNode };
-use disjunctgraph::{ LinkedGraph, Graph, NodeId };
+use jobshop::problem::Problem;
+use disjunctgraph::{ Graph, NodeId };
 
 use gdk::RGBA;
 use cairo::Context;
@@ -21,20 +21,20 @@ use relm_attributes::widget;
 
 use self::GraphMsg::*;
 
-pub struct Model {
+pub struct Model<I: Graph> {
     draw_handler: DrawHandler<DrawingArea>,    
-    graph: LinkedGraph<ProblemNode>,
+    graph: I,
     problem: Problem,
 }
 
 #[derive(Msg, Debug)]
-pub enum GraphMsg {    
-    SetProblem((Problem, LinkedGraph<ProblemNode>)),
+pub enum GraphMsg<I: Graph> {
+    SetProblem((Problem, I)),
     UpdateDrawBuffer,
 }
 
 #[widget]
-impl Widget for GraphWidget {
+impl<I: Graph + 'static> Widget for GraphWidget<I> where I: Graph {
 
     fn init_view(&mut self) {
         self.model.draw_handler.init(&self.drawing_area);
@@ -44,7 +44,7 @@ impl Widget for GraphWidget {
 
     }
 
-    fn model(_: &Relm<Self>, (problem, graph): (Problem, LinkedGraph<ProblemNode>)) -> Model {
+    fn model(_: &Relm<Self>, (problem, graph): (Problem, I)) -> Model<I> {
         Model {
             draw_handler: DrawHandler::new().expect("draw handler"),            
             graph, problem,
@@ -62,7 +62,7 @@ impl Widget for GraphWidget {
         context.paint();                
     
         let problem: &Problem = &self.model.problem;
-        let graph: &LinkedGraph<ProblemNode> = &self.model.graph;
+        let graph: &I = &self.model.graph;
 
         let job_count = problem.jobs.len(); // There will be this many 'lanes'
         let max_activities = problem.jobs.iter().map(|x| x.len()).max().unwrap_or(0); // This is the max length
@@ -206,7 +206,7 @@ impl Widget for GraphWidget {
         }
     }
 
-    fn update(&mut self, event: GraphMsg) {        
+    fn update(&mut self, event: GraphMsg<I>) {        
         match event {
             SetProblem((problem, graph)) => {
                 self.model.graph = graph;

@@ -25,7 +25,7 @@ impl Schedule {
     }
 
 
-    pub fn from_graph<I: Graph<ProblemNode>>(problem: Problem, graph: I) -> Schedule {
+    pub fn from_graph<I: Graph>(problem: Problem, graph: I) -> Schedule {
         use std::collections::VecDeque;
 
         let topology = graph.topology();

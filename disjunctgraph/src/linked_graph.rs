@@ -10,7 +10,8 @@ pub struct LinkedGraph<T: NodeId + Clone> {
     disjunctions: Vec<HashSet<usize>>
 }
 
-impl<T: NodeId + GraphNode + Clone> Graph<T> for LinkedGraph<T> {
+impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
+    type Node = T;
 
     fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self {
 

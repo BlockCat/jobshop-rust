@@ -1,4 +1,4 @@
-use disjunctgraph::{ Graph, GraphNode };
+use disjunctgraph::{ Graph, GraphNode, NodeId };
 
 #[derive(Debug)]
 pub enum ConstraintError {
@@ -18,7 +18,7 @@ pub struct ProblemConstraints {
 }
 
 impl ProblemConstraints {
-    pub fn new<I: Graph<J>, J: GraphNode>(graph: &I, upper_bound: u32) -> Result<Self, ConstraintError> {
+    pub fn new<I: Graph>(graph: &I, upper_bound: u32) -> Result<Self, ConstraintError> {
         
         let topology = {
             let topology = graph.topology();

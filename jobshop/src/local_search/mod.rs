@@ -1,6 +1,6 @@
 use disjunctgraph::{ Graph, GraphNode, NodeId };
 
-use crate::problem::{ ProblemSolver, Problem, ProblemNode, ProblemGraph };
+use crate::problem::{ ProblemSolver, Problem, ProblemNode };
 use crate::schedule::Schedule;
 
 // In the case of a search, it might be nice to only store partial orientations.
@@ -25,14 +25,14 @@ impl ProblemSolver for LocalSearch {
         use rand::Rng;
         use rand::seq::SliceRandom;
 
-        let graph = ProblemGraph::<LinkedGraph, ProblemNode>::from(problem).0;
+        let graph = problem.into_graph::<LinkedGraph>();
         
         let mut graph = graph.into_directed().expect("Graph was directed, something wentwrong check code.");
-        let mut waiter = 0;
+        let mut no_improvement_cycles = 0;
         let mut counter = 0;
         let mut rand = rand::thread_rng();
 
-        while waiter <= 10 {
+        while no_improvement_cycles <= 10 {
 
             counter += 1;
 
@@ -67,9 +67,9 @@ impl ProblemSolver for LocalSearch {
             }
 
             if improvement_found {
-                waiter = 0;
+                no_improvement_cycles = 0;
             } else {
-                waiter += 1;
+                no_improvement_cycles += 1;
             }
         }
 

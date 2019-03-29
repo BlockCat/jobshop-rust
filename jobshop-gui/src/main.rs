@@ -27,7 +27,7 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 16;
+const UPPER: u32 = 800;
 
 #[derive(Msg)]
 pub enum Msg {
@@ -48,9 +48,10 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_test.txt";
+        let path = "bench_la02.txt";
         let problem = Problem::read(path).expect("Could not find path");
-        let graph = ProblemGraph::<LinkedGraph<ProblemNode>, ProblemNode>::from(&problem).0;        
+        let graph = problem.into_graph();
+
         Model {
             counter: 0,
             problem, graph
@@ -59,8 +60,6 @@ impl Widget for Win {
 
     fn update(&mut self, event: Msg) {
         match event {
-            // A call to self.label1.set_text() is automatically inserted by the
-            // attribute every time the model.counter attribute is updated.
             Msg::Decrement => { // Calculate the span
                 match self.model.graph.critical_path() {
                     Ok((span, _)) => self.model.counter = span,
@@ -125,8 +124,9 @@ impl Widget for Win {
                     // will be updated too.
                     text: &self.model.counter.to_string(),
                 },
-                gtk::Button("Calculate spanning") {
+                gtk::Button {
                     clicked => Msg::Decrement,
+                    label: "Calculate spanning"
                 },
                 gtk::Box {
                     orientation: Horizontal, 
@@ -138,13 +138,13 @@ impl Widget for Win {
                             text: "Enter which edge to fix"
                         },
                         #[name="edge_selection"]
-                        EdgeSelection(self.model.graph.clone()) {
+                        EdgeSelection::<LinkedGraph<ProblemNode>>(self.model.graph.clone()) {
                             EdgeFix(a, b) => Fix(a, b),
                         },
                     },
         
                     #[name="graph"]
-                    GraphWidget((self.model.problem.clone(), self.model.graph.clone())),
+                    GraphWidget::<LinkedGraph<ProblemNode>>((self.model.problem.clone(), self.model.graph.clone())),
                     #[name="constraints"]
                     ConstraintsWidget(((&self.model.problem).clone(), ProblemConstraints::new(&self.model.graph, UPPER).unwrap()))
                 }

@@ -1,16 +1,16 @@
-use disjunctgraph::{ Graph, GraphNode, NodeId, LinkedGraph };
-use jobshop::problem::ProblemNode;
+use disjunctgraph::{ Graph, NodeId };
 
 use relm::{ Update, Relm, Widget };
 use gtk::prelude::*;
 
-pub struct EdgeSelection {
-    model: EdgeModel,
+
+pub struct EdgeSelection<I: Graph> {
+    model: EdgeModel<I>,
     root: gtk::Box,
 }
 
-pub struct EdgeModel {
-    graph: LinkedGraph<ProblemNode>,
+pub struct EdgeModel<I: Graph> {
+    graph: I
 }
 
 #[derive(Debug, Msg)]
@@ -20,23 +20,23 @@ pub enum EdgeMsg {
     Swap(usize, usize),
 }
 
-impl Update for EdgeSelection {
-    type Model = EdgeModel;
-    type ModelParam = LinkedGraph<ProblemNode>;
+impl<I: Graph> Update for EdgeSelection<I> {
+    type Model = EdgeModel<I>;
+    type ModelParam = I;
     type Msg = EdgeMsg;
 
     fn model(_: &Relm<Self>, graph: Self::ModelParam) -> Self::Model {
         EdgeModel {
-            graph
+            graph,            
         }
     }
 
-    fn update(&mut self, event: Self::Msg) {
+    fn update(&mut self, _event: Self::Msg) {
 
     }
 }
 
-impl Widget for EdgeSelection {
+impl<I: Graph> Widget for EdgeSelection<I> {
     type Root = gtk::Box;
 
     fn root(&self) -> Self::Root {
@@ -46,7 +46,7 @@ impl Widget for EdgeSelection {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let container = gtk::Box::new(gtk::Orientation::Vertical, 1);
 
-        let graph: &LinkedGraph<ProblemNode> = &model.graph;
+        let graph: &I = &model.graph;
         let disjunctions = graph.nodes()
             .iter()
             .map(|x| x.id())

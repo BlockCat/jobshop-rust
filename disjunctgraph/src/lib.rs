@@ -29,14 +29,15 @@ pub enum Relation {
     Successor(usize), Predecessor(usize), Disjunctive(usize)
 }
 
-pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
-    fn create(nodes: Vec<T>, edges: Vec<Vec<Relation>>) -> Self;
-    fn nodes(&self) -> &[T];
-    fn source(&self) -> &T;
-    fn sink(&self) -> &T;
-    fn successors(&self, id: &impl NodeId) -> Vec<&T>;
-    fn predecessors(&self, id: &impl NodeId) -> Vec<&T>;
-    fn disjunctions(&self, id: &impl NodeId) -> Vec<&T>;
+pub trait Graph where Self: Sized {
+    type Node: NodeId + GraphNode;
+    fn create(nodes: Vec<Self::Node>, edges: Vec<Vec<Relation>>) -> Self;
+    fn nodes(&self) -> &[Self::Node];
+    fn source(&self) -> &Self::Node;
+    fn sink(&self) -> &Self::Node;
+    fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
+    fn predecessors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
+    fn disjunctions(&self, id: &impl NodeId) -> Vec<&Self::Node>;
     fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
@@ -56,7 +57,8 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
         // Once children are done the node will be visited again postorder action is taken.
         // To prevent loops, the node will only be handled if it doesn't have a topology order and it's not in the stack.
 
-        enum Status { Visisted(usize), Unvisited(usize) };
+        enum Status { Visisted(usize), Unvisited(usize) }
+
         let mut stack: VecDeque<Status> = VecDeque::with_capacity(processed.len() / 4);
 
         stack.push_back(Status::Unvisited(source.id()));
@@ -86,7 +88,7 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
         processed
     }
 
-    fn critical_path(&self) -> std::result::Result<(u32, Vec<&T>), GraphError> {
+    fn critical_path(&self) -> std::result::Result<(u32, Vec<&Self::Node>), GraphError> {
         let topology = self.topology();
 
         let mut nodes = (0..self.nodes().len()).collect::<Vec<usize>>();
@@ -141,7 +143,8 @@ pub trait Graph<T> where T: NodeId + GraphNode, Self: Sized {
         // Once children are done the node will be visited again postorder action is taken.
         // To prevent loops, the node will only be handled if it doesn't have a topology order and it's not in the stack.
 
-        enum Status { Visisted(usize), Unvisited(usize) };
+        enum Status { Visisted(usize), Unvisited(usize) }
+
         let mut stack: VecDeque<Status> = VecDeque::with_capacity(processed.len() / 4);
 
         stack.push_back(Status::Unvisited(source.id()));
