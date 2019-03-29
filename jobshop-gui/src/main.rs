@@ -28,7 +28,6 @@ mod widget_constraints;
 mod widget_edge_selection;
 
 const UPPER: u32 = 800;
-
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -138,13 +137,13 @@ impl Widget for Win {
                             text: "Enter which edge to fix"
                         },
                         #[name="edge_selection"]
-                        EdgeSelection::<LinkedGraph<ProblemNode>>(self.model.graph.clone()) {
+                        EdgeSelection<LinkedGraph<ProblemNode>>(self.model.graph.clone()) {
                             EdgeFix(a, b) => Fix(a, b),
                         },
                     },
         
                     #[name="graph"]
-                    GraphWidget::<LinkedGraph<ProblemNode>>((self.model.problem.clone(), self.model.graph.clone())),
+                    GraphWidget<LinkedGraph<ProblemNode>>((self.model.problem.clone(), self.model.graph.clone())),
                     #[name="constraints"]
                     ConstraintsWidget(((&self.model.problem).clone(), ProblemConstraints::new(&self.model.graph, UPPER).unwrap()))
                 }
