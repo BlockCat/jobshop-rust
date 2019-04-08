@@ -89,7 +89,7 @@ impl Widget for Win {
                 let node_1 = &self.model.graph.nodes()[a];
                 let node_2 = &self.model.graph.nodes()[b];
                 if constraints.check_precedence(node_1, node_2) {
-                    let graph = self.model.graph.fix_disjunction(node_1, node_2).expect("not cyclic");
+                    let graph = self.model.graph.clone().fix_disjunction(node_1, node_2).expect("not cyclic");
                     let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
 
                     self.model.graph = graph;

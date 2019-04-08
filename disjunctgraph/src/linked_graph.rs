@@ -71,49 +71,48 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 		self.disjunctions[id.id()].iter().map(|x| &self.nodes[*x]).collect()
 	}
 
-    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
+    fn fix_disjunction(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
         if !self.disjunctions[node_1.id()].contains(&node_2.id()) {
             return Err(GraphError::InvalidEdge);
         }
 
-        let mut cloned = self.clone();
         let node_1 = node_1.id();
         let node_2 = node_2.id();
         
         // Remove from disjunctions        
-        cloned.disjunctions[node_1].remove(&node_2);
-        cloned.disjunctions[node_2].remove(&node_1);
+        self.disjunctions[node_1].remove(&node_2);
+        self.disjunctions[node_2].remove(&node_1);
         
         // Node_1 -> Node_2
-        cloned.successors[node_1].insert(node_2);
-        cloned.predecessors[node_2].insert(node_1);        
+        self.successors[node_1].insert(node_2);
+        self.predecessors[node_2].insert(node_1);        
 		
-        if cloned.is_cyclic() {
+        if self.is_cyclic() {
             Err(disjunctgraph::GraphError::Cyclic)
         } else {
-            Ok(cloned)
+            Ok(self)
         }
 	}
 
-    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
+    fn flip_edge(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
         if !self.successors[node_1.id()].contains(&node_2.id()) {
             return Err(GraphError::InvalidEdge);
         }
         
-        let mut cloned = self.clone();
+        
         let node_1 = node_1.id();
         let node_2 = node_2.id();
         // node_1 -> node_2
-        cloned.successors[node_1].remove(&node_2);
-        cloned.predecessors[node_2].remove(&node_1);
+        self.successors[node_1].remove(&node_2);
+        self.predecessors[node_2].remove(&node_1);
 
-        cloned.predecessors[node_1].insert(node_2);
-        cloned.successors[node_2].insert(node_1);
+        self.predecessors[node_1].insert(node_2);
+        self.successors[node_2].insert(node_1);
         		
-        if cloned.is_cyclic() {
+        if self.is_cyclic() {
             Err(disjunctgraph::GraphError::Cyclic)
         } else {
-            Ok(cloned)
+            Ok(self)
         }
 	}
 

@@ -63,6 +63,9 @@ impl ProblemSolver for LocalSearch {
                     graph = candidate_graph;
                     improvement_found = true;
                     break;
+                } else {
+                    // Turn the candidate back around
+                    graph = candidate_graph.flip_edge(&b, &a).expect("Could not return the flipped edge back")
                 }
             }
 

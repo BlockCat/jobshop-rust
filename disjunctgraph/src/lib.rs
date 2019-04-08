@@ -38,8 +38,8 @@ pub trait Graph where Self: Sized {
     fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
     fn predecessors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
     fn disjunctions(&self, id: &impl NodeId) -> Vec<&Self::Node>;
-    fn fix_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
-    fn flip_edge(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
+    fn fix_disjunction(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
+    fn flip_edge(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
 
     fn topology(&self) -> Vec<u16> {

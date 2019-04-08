@@ -1,3 +1,6 @@
 /target
 **/*.rs.bk
 *.dot
+perf.data
+Hotspot-git.0626849-x86_64.AppImage
+perf.data.old
