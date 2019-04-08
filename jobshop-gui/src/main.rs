@@ -28,6 +28,7 @@ mod widget_constraints;
 mod widget_edge_selection;
 
 const UPPER: u32 = 800;
+const TEMP: u32 = 4000;
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -68,7 +69,7 @@ impl Widget for Win {
             Msg::Increment => { // Do local search
                 use std::time;
                 let timer = time::Instant::now();
-                let searcher = LocalSearch::new(4000);                
+                let searcher = LocalSearch::new(TEMP);                
                 let graph = searcher.solve(&self.model.problem);
                 let end = time::Instant::now();
 
