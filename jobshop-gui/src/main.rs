@@ -27,8 +27,8 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 800;
-const TEMP: u32 = 4000;
+const UPPER: u32 = 13;
+const TEMP: u32 = 10000;
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -48,7 +48,7 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_la02.txt";
+        let path = "bench_test.txt";
         let problem = Problem::read(path).expect("Could not find path");
         let graph = problem.into_graph();
 
@@ -149,8 +149,6 @@ impl Widget for Win {
                     ConstraintsWidget(((&self.model.problem).clone(), ProblemConstraints::new(&self.model.graph, UPPER).unwrap()))
                 }
             },
-            // Use a tuple when you want to both send a message and return a value to
-            // the GTK+ callback.
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
         }
     }
@@ -159,13 +157,3 @@ impl Widget for Win {
 fn main() {
     Win::run(()).expect("Could not start window");
 }
-
-// fn fix_graph(graph: LinkedGraph<ProblemNode>) -> Result<LinkedGraph<ProblemNode>, disjunctgraph::GraphError> {
-//         graph.fix_disjunction(&4, &8)?
-//             .fix_disjunction(&1, &7)?
-//             .fix_disjunction(&6, &2)?
-//             .fix_disjunction(&6, &5)?
-//             .fix_disjunction(&2, &5)?
-//             .fix_disjunction(&4, &3)?
-//             .fix_disjunction(&8, &3)
-// }

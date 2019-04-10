@@ -1,2 +1,5 @@
 [workspace]
 members = ["disjunctgraph", "jobshop", "jobshop-gui"]
+
+[profile.release]
+debug = true

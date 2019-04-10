@@ -3,7 +3,6 @@ use disjunctgraph::{ Graph, NodeId };
 use relm::{ Update, Relm, Widget };
 use gtk::prelude::*;
 
-
 pub struct EdgeSelection<I: Graph> {
     model: EdgeModel<I>,
     root: gtk::Box,
@@ -44,7 +43,14 @@ impl<I: Graph> Widget for EdgeSelection<I> {
     }
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
+        let scroll_container = gtk::Box::new(gtk::Orientation::Vertical, 1);
         let container = gtk::Box::new(gtk::Orientation::Vertical, 1);
+
+        container.set_vexpand(true);
+        scroll_container.set_vexpand(true);
+
+        
+        let scrollbar = gtk::ScrolledWindow::new(None, None);
 
         let graph: &I = &model.graph;
         let disjunctions = graph.nodes()
@@ -55,10 +61,12 @@ impl<I: Graph> Widget for EdgeSelection<I> {
             .filter(|(a, b)| a > b );
 
         for (a, b) in disjunctions {
+
+            let mini_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             let label = format!("{} -> {}", a, b);
             let button = gtk::Button::new();
             button.set_label(&label);
-            container.add(&button);
+            mini_box.add(&button);
 
             
             connect!(relm, button, connect_clicked(_), Some(EdgeMsg::Fix(a, b)));
@@ -66,16 +74,23 @@ impl<I: Graph> Widget for EdgeSelection<I> {
             let label = format!("{} -> {}", b, a);
             let button: gtk::Button = gtk::Button::new();
             button.set_label(&label);
-            container.add(&button);
+            mini_box.add(&button);
 
             connect!(relm, button, connect_clicked(_), Some(EdgeMsg::Fix(b, a)));
+
+            container.add(&mini_box);
         }
 
+        scrollbar.add(&container);
+        scroll_container.add(&scrollbar);
+        scrollbar.show_all();
         container.show_all();
+        scroll_container.show_all();
+
 
         EdgeSelection {
             model, 
-            root: container,
+            root: scroll_container,
         }
 
     }
