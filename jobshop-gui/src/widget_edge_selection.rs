@@ -2,6 +2,7 @@ use disjunctgraph::{ Graph, NodeId };
 
 use relm::{ Update, Relm, Widget };
 use gtk::prelude::*;
+use gtk::WidgetExt;
 
 pub struct EdgeSelection<I: Graph> {
     model: EdgeModel<I>,
@@ -13,16 +14,17 @@ pub struct EdgeModel<I: Graph> {
 }
 
 #[derive(Debug, Msg)]
-pub enum EdgeMsg {
+pub enum EdgeMsg<I: Graph> {
     Fix(usize, usize),
     Unfix(usize, usize),
     Swap(usize, usize),
+    SetProblem(I),
 }
 
 impl<I: Graph> Update for EdgeSelection<I> {
     type Model = EdgeModel<I>;
     type ModelParam = I;
-    type Msg = EdgeMsg;
+    type Msg = EdgeMsg<I>;
 
     fn model(_: &Relm<Self>, graph: Self::ModelParam) -> Self::Model {
         EdgeModel {
@@ -30,12 +32,18 @@ impl<I: Graph> Update for EdgeSelection<I> {
         }
     }
 
-    fn update(&mut self, _event: Self::Msg) {
-
+    fn update(&mut self, event: Self::Msg) {
+        match event {
+            EdgeMsg::SetProblem(graph) => {
+                self.model.graph = graph;
+                self.root.queue_draw();
+            },
+            _ => {}
+        }
     }
 }
 
-impl<I: Graph> Widget for EdgeSelection<I> {
+impl<I: Graph + 'static> Widget for EdgeSelection<I> {
     type Root = gtk::Box;
 
     fn root(&self) -> Self::Root {

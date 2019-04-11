@@ -9,7 +9,7 @@ extern crate cairo;
 
 use relm_attributes::widget;
 
-use disjunctgraph::{ Graph, LinkedGraph };
+use disjunctgraph::{ Graph, LinkedGraph, NodeId };
 use jobshop::problem::*;
 use jobshop::constraints::*;
 use jobshop::local_search::LocalSearch;
@@ -27,7 +27,7 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 13;
+const UPPER: u32 = 650;
 const TEMP: u32 = 10000;
 #[derive(Msg)]
 pub enum Msg {
@@ -48,7 +48,7 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_test.txt";
+        let path = "bench_la02.txt";
         let problem = Problem::read(path).expect("Could not find path");
         let graph = problem.into_graph();
 
@@ -81,7 +81,7 @@ impl Widget for Win {
                 
                 self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
                 self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), ProblemConstraints::new(&self.model.graph, span).unwrap())));
-
+                self.edge_selection.emit(EdgeMsg::SetProblem(self.model.graph.clone()));
             },
             Msg::Fix(a, b) => {
                 println!("{:?}->{:?}", a, b);
@@ -89,12 +89,34 @@ impl Widget for Win {
                 let node_1 = &self.model.graph.nodes()[a];
                 let node_2 = &self.model.graph.nodes()[b];
                 if constraints.check_precedence(node_1, node_2) {
-                    let graph = self.model.graph.clone().fix_disjunction(node_1, node_2).expect("not cyclic");
-                    let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
 
-                    self.model.graph = graph;
-                    self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
-                    self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), constraints)));
+                    let graph = self.model.graph.clone().fix_disjunction(node_1, node_2);
+                    if let Ok(graph) = graph {
+                        let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
+                        println!("Is 2b consistent: {}", constraints.check_2b_precedence(&graph));
+                        println!("Is 3b consistent: {}", constraints.check_3b_precedence(&graph));
+                        
+                        let graph = graph.nodes().into_iter()
+                            .map(|x| graph.disjunctions(x).into_iter().map(move |y| (x, y)))
+                            .flatten()
+                            .filter(|&(x, y)| !constraints.check_precedence(x, y))            
+                            .map(|(x, y)| (y.id(), x.id()))
+                            .fold(graph.clone(), |acc, (x, y)| {
+                                acc.fix_disjunction(&x, &y).expect("Could not fix")
+                            });
+
+                        println!("Is 2b consistent: {}", constraints.check_2b_precedence(&graph));
+                        println!("Is 3b consistent: {}", constraints.check_3b_precedence(&graph));
+
+                        
+
+                        self.model.graph = graph;
+                        self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
+                        self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), constraints)));
+                        self.edge_selection.emit(EdgeMsg::SetProblem(self.model.graph.clone()));
+                    } else {
+                        println!("Can't fix edge for some reason");
+                    }                    
                 } else {
                     println!("Leads to infeasible solution");
                 }
