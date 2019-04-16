@@ -27,7 +27,7 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 650;
+const UPPER: u32 = 600;
 const TEMP: u32 = 10000;
 #[derive(Msg)]
 pub enum Msg {

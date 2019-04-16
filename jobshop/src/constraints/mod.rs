@@ -68,29 +68,31 @@ impl ProblemConstraints {
     fn fix_2b_consistency<I: Graph>(&mut self, graph: &I) {
         let nodes = graph.nodes();
         
-        let mut should_continue = true;
         dbg!("This is inefficient, fix_2b_consistency");
-        while should_continue {            
-            should_continue = nodes.iter().map(|node| self.fix_2b_consistency_node(graph, node)).any(|x| x);
+        while nodes.iter().map(|node| self.fix_2b_consistency_node(graph, node)).any(|x| x) {
+            // Do nothing,
         }
+        
     }
 
     fn fix_2b_consistency_node<I: Graph>(&mut self, graph: &I, node: &I::Node) -> bool {
         let mut changed = false;
-        let p_i = node.weight();
-        let est_i = self.constraints[node.id()].left_bound;
-        let lst_i = self.constraints[node.id()].right_bound - p_i;        
 
         for disjunction in graph.disjunctions(node) {
             let p_j = disjunction.weight();
             let lst_j = self.constraints[disjunction.id()].right_bound - p_j;
             let est_j = self.constraints[disjunction.id()].left_bound;
-            if (est_i + p_i > lst_j) && (est_j + p_j > est_i) { // Executes 2-b-consistency rule
+
+            // Node -> disjunction not possible.
+            // Has to be disjunction -> node
+            if !self.check_precedence(node, disjunction) {
                 self.constraints[node.id()].left_bound = est_j + p_j;
                 changed = true;
             }
 
-            if (est_j + p_j > lst_i) && (lst_j < lst_i + p_i) {
+            // Disjunction -> node not possible,
+            // has to be node -> disjunction
+            if !self.check_precedence(disjunction, node) {
                 self.constraints[node.id()].right_bound = lst_j;
                 changed = true;
             }
@@ -118,68 +120,61 @@ impl ProblemConstraints {
                 if j.id() > k.id() {
                     let tests = self.tests::<I>(node, j, k);
 
-                    if !tests {
-                        let (p_i, p_j, p_k) = (node.weight() as i32, j.weight() as i32, k.weight() as i32);
-                        let est_i = self.constraints[node.id()].left_bound as i32;
-                        let est_j = self.constraints[j.id()].left_bound as i32;
-                        let est_k = self.constraints[k.id()].left_bound as i32;
+                    let (p_i, p_j, p_k) = (node.weight(), j.weight(), k.weight());
+                        let est_i = self.constraints[node.id()].left_bound;
+                        let est_j = self.constraints[j.id()].left_bound;
+                        let est_k = self.constraints[k.id()].left_bound;
+
+                        let lct_i = self.constraints[node.id()].right_bound;                        
+                        let lct_j = self.constraints[j.id()].right_bound;
+                        let lct_k = self.constraints[k.id()].right_bound;
+
+                    if !tests.1 {
+                        let mut next_value = lct_i;
+                        // First, if jik can be satisfied...
+                        let jik = (est_i <= est_j + p_j) & (est_j + p_j + p_i + p_k <= lct_k)
+                            & (lct_k <= lct_i + p_k) & (lct_k - p_k < next_value);
+                        let kij = (est_i <= est_k + p_k) & (est_k + p_k + p_i + p_j <= lct_j)
+                            & (lct_j <= lct_i + p_j) & (lct_j - p_j < next_value);
                         
-                        let lct_i = self.constraints[node.id()].right_bound as i32;
-                        let lct_j = self.constraints[j.id()].right_bound as i32;
-                        let lct_k = self.constraints[k.id()].right_bound as i32;
-
-                        // Est_i consistency tests
-                        let next_value = std::cmp::min(est_j, est_k) + p_j + p_k;
-                        let consistency_test_1 = {
-                            let m = *([
-                                lct_j - est_i, 
-                                lct_j - est_k, 
-                                lct_k - est_i, 
-                                lct_k - est_j]
-                                .into_iter().max().unwrap());
-                            m < p_i + p_j + p_k && next_value > est_i
-                        };
-
-                        let consistency_test_2 = est_i + p_i > std::cmp::max(lct_j - p_j, lct_k - p_k) && next_value > est_i;
-                        let consistency_test_3 = std::cmp::max(lct_j - est_i, lct_k - est_i) < p_i + p_j + p_k 
-                            && std::cmp::min(est_j + p_j, est_k + p_k) > est_i;
-                        
-                        if consistency_test_1 || consistency_test_2 {
-                            self.constraints[node.id()].left_bound = next_value as u32;
+                        // This should be wrong. This takes the assumption that jik or kij will be satisfied before jki or kji
+                        if jik {
+                            next_value = lct_k - p_k;
                             changed = true;
-                        } 
-
-                        if consistency_test_3 {
-                            self.constraints[node.id()].left_bound = std::cmp::min(est_j + p_j, est_k + p_k) as u32;
+                        } else if kij {
+                            next_value = lct_j - p_j;
                             changed = true;
+                        } else {
+                            let path = std::cmp::min(est_j + p_j + p_k, est_k + p_k + p_j); // jki or kji
+                            if path > next_value {
+                                changed = true;
+                                next_value = path;
+                            }
                         }
+                        self.constraints[node.id()].right_bound = next_value;
+                    }
 
-                        // Lst_i consistency tests
-                        let m = *([
-                            lct_i - est_j, 
-                            lct_i - est_k, 
-                            lct_j - est_k, 
-                            lct_k - est_j]
-                            .into_iter()
-                            .max().unwrap());
-                        
-                        let next_value = std::cmp::max(lct_j, lct_k) - p_j - p_k;
-
-                        if (m < p_i + p_j + p_k) & (next_value < lct_i) {
-                            self.constraints[node.id()].right_bound = next_value as u32;
-                            changed = true;
+                    if !tests.0 {
+                        let mut next_value = est_i;
+                        // First, if jik can be satisfied...
+                        if  (est_i <= est_j + p_j) & (est_j + p_j + p_i + p_k <= lct_k)
+                            & (lct_k <= lct_i + p_k) & (est_j + p_j > next_value) {
+                            next_value = est_j + p_j;
+                            changed = true;    
+                        // Else if kij can be satisfied...
+                        } else if  (est_i <= est_k + p_k) & (est_k + p_k + p_i + p_j <= lct_j)
+                            & (lct_j <= lct_i + p_j) & (est_k + p_k > next_value) {
+                            next_value = est_j + p_j;
+                            changed = true;    
+                        } else {
+                            let path = std::cmp::min(est_j + p_j + p_k, est_k + p_k + p_j); // jki or kji
+                            if path > next_value {
+                                changed = true;
+                                next_value = path;
+                            }
                         }
-                        if (std::cmp::min(est_j + p_j, est_k + p_k) + p_i > lct_i) & (next_value < lct_i) {
-                            self.constraints[node.id()].right_bound = next_value as u32;
-                            changed = true;
-                        }
-                        let next_value = std::cmp::max(lct_j - p_j, lct_k - p_k);
-                        let consistency_test_6 = std::cmp::max(lct_i - est_j, lct_i - est_k) < p_i + p_j + p_k
-                            && next_value < lct_i;
-
-                        if  consistency_test_6 {
-                            self.constraints[node.id()].right_bound = next_value as u32;
-                        }
+                        self.constraints[node.id()].left_bound = next_value;
+                                                
                     }
                 }
             }
@@ -187,31 +182,27 @@ impl ProblemConstraints {
 
         changed
     }    
+    // is it i->etc or etc->i
+    fn tests<I: Graph>(&mut self, node: &I::Node, j: &I::Node, k: &I::Node) -> (bool, bool) {        
+        
+        let ji = self.check_precedence(j, node);
+        let ki = self.check_precedence(k, node);
 
-    fn tests<I: Graph>(&mut self, node: &I::Node, j: &I::Node, k: &I::Node) -> bool {
-        let (p_i, p_j, p_k) = (node.weight(), j.weight(), k.weight());
-        let est_i = self.constraints[node.id()].left_bound;
+        let ij = self.check_precedence(node, j);
+        let ik = self.check_precedence(node, k);
 
-        let lct_j = self.constraints[j.id()].right_bound;
-        let lct_k = self.constraints[k.id()].right_bound;
+        let jk = self.check_precedence(j, k);
+        let kj = self.check_precedence(k, j);
 
-        std::cmp::max(lct_j, lct_k) >= p_i + p_j + p_k + est_i
+        ((ij & jk) | (ik & kj), (kj & ji) | (jk & ki))
     }
 
     pub fn check_2b_precedence<I:Graph>(&self, graph: &I) -> bool {
         graph.nodes().into_iter()
             .map(|node| graph.disjunctions(node).into_iter().map(move |o| (node, o)))
             .flatten()
-            .all(|(node, disj)| {
-                let est_i = self.constraints[node.id()].left_bound;
-                let lct_i = self.constraints[node.id()].right_bound;
-                let p_i = node.weight();
-
-                let est_j = self.constraints[disj.id()].left_bound;
-                let lct_j = self.constraints[disj.id()].right_bound;                
-                let p_j = disj.weight();
-
-                est_i + p_i + p_j <= lct_j || est_j + p_j + p_i <= lct_i
+            .all(|(i, j)| {
+                self.check_precedence(i, j) | self.check_precedence(j, i)                
             })
     }
 
@@ -221,24 +212,18 @@ impl ProblemConstraints {
             .flat_map(|(node, a)| graph.disjunctions(node).into_iter().map(move |o| (node, a, o)))
             .filter(|(_, j, k)| j.id() > k.id())
             .all(|(i, j, k)| {
-                let est_i = self.constraints[i.id()].left_bound;
-                let est_j = self.constraints[j.id()].left_bound;
-                let est_k = self.constraints[k.id()].left_bound;
-                
-                let lct_i = self.constraints[i.id()].right_bound;
-                let lct_j = self.constraints[j.id()].right_bound;
-                let lct_k = self.constraints[k.id()].right_bound;                
+                let ij = self.check_precedence(i, j);
+                let ji = self.check_precedence(j, i);
 
-                let p_i = i.weight();
-                let p_j = j.weight();
-                let p_k = k.weight();
+                let jk = self.check_precedence(j, k);
+                let kj = self.check_precedence(k, j);
 
-                (est_i + p_i <= est_j && est_j + p_j + p_k <= lct_k)
-                || (est_i + p_i <= est_k && est_k + p_k + p_j <= lct_j)
-                || (est_j + p_j <= est_i && est_i + p_i + p_k <= lct_k)
-                || (est_k + p_k <= est_i && est_i + p_i + p_j <= lct_j)
-                || (est_j + p_j <= est_k && est_k + p_k <= est_i)
-                || (est_k + p_k <= est_j && est_j + p_j <= est_i)
+                let ik = self.check_precedence(i, k);
+                let ki = self.check_precedence(k, i);
+
+                (ij & jk) | (ik & kj) |
+                (ji & ik) | (jk & ki) |
+                (ki & ij) | (kj & ji)
             })
     }
     
@@ -247,9 +232,5 @@ impl ProblemConstraints {
         // Meaning the earliest end date of node_1 has to be before the latest start date of node_2      
 
         self.constraints[node_1.id()].left_bound + node_1.weight() + node_2.weight() <= self.constraints[node_2.id()].right_bound
-    }
-
-    pub fn set_upper_bound(&mut self, _upper_bound: u32) -> Result<(), ConstraintError> {
-        unimplemented!()
     }
 }

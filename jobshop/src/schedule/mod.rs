@@ -3,9 +3,9 @@ use crate::problem::{ Activity, Problem, ProblemNode };
 use disjunctgraph::{Graph, NodeId, GraphNode };
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ScheduledActivity {    
-    pub starting_time: u32,
-    pub activity: Activity
+pub struct ScheduledActivity {
+    pub activity: Activity,
+    pub starting_time: u32,    
 }
 
 #[derive(Debug, PartialEq, Eq)]

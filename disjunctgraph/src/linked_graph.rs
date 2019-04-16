@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use crate::{ NodeId, GraphNode, Graph, Relation, GraphError, self as disjunctgraph };
 

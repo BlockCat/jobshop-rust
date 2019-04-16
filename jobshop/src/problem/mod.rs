@@ -15,9 +15,9 @@ pub trait ProblemSolver {
 #[derive(Debug, Clone)]
 pub struct Problem {
     pub machines: u32,
-    pub activities: Vec<Activity>,
-    pub jobs: Vec<Vec<usize>>,
     pub optimal: u32,
+    pub activities: Vec<Activity>,
+    pub jobs: Vec<Vec<usize>>,    
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,8 +161,8 @@ impl Problem {
 #[derive(Clone, Debug)]
 pub struct ProblemNode {
     id: usize,
-    weight: u32,
     job_id: Option<usize>,
+    weight: u32,    
     machine_id: Option<u32>
 }
 

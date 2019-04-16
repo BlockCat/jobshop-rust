@@ -21,13 +21,12 @@ impl LocalSearch {
 impl ProblemSolver for LocalSearch {
     type Solution = LinkedGraph;
 
-    fn solve(&self, problem: &Problem) -> Self::Solution {        
-        use rand::Rng;
+    fn solve(&self, problem: &Problem) -> Self::Solution {                
         use rand::seq::SliceRandom;
 
         let graph = problem.into_graph::<LinkedGraph>();
         
-        let mut graph = graph.into_directed().expect("Graph was directed, something wentwrong check code.");
+        let mut graph = graph.into_directed().expect("Graph was directed, something went wrong check code.");
         let mut no_improvement_cycles = 0;
         let mut counter = 0;
         let mut rand = rand::thread_rng();
