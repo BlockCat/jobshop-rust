@@ -20,24 +20,19 @@ pub struct ProblemConstraints {
 impl ProblemConstraints {
     pub fn new<I: Graph>(graph: &I, upper_bound: u32) -> Result<Self, ConstraintError> {
         
-        let topology = {
-            let topology = graph.topology();
-            let mut nodes = (0..graph.nodes().len()).collect::<Vec<_>>();
-            nodes.sort_by_key(|x| std::cmp::Reverse(topology[*x]));
-            nodes
-        };        
+        let topology = graph.topology1().collect::<Vec<&I::Node>>();
         let nodes = graph.nodes();
         
         let mut constraints: Vec<ActivityConstraint> = vec!(ActivityConstraint { left_bound: 0, right_bound: 0 }; nodes.len());
 
-        for node in topology.iter().map(|x| &nodes[*x]) {
-            constraints[node.id()].left_bound = graph.predecessors(node).iter()
+        for node in topology.iter() {
+            constraints[node.id()].left_bound = graph.predecessors(*node).iter()
                     .map(|x| constraints[x.id()].left_bound + x.weight())
                     .max().unwrap_or(0);             
         }
 
-        for node in topology.iter().rev().map(|x| &nodes[*x]) {
-            let job_predecessor = graph.successors(node).iter()
+        for node in topology.iter().rev() {
+            let job_predecessor = graph.successors(*node).iter()
                     .map(|x| constraints[x.id()].right_bound - x.weight())
                     .min().unwrap_or(upper_bound);
             

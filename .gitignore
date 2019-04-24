@@ -2,5 +2,5 @@
 **/*.rs.bk
 *.dot
 perf.data
-Hotspot-git.0626849-x86_64.AppImage
+*.AppImage
 perf.data.old

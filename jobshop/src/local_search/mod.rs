@@ -56,7 +56,7 @@ impl ProblemSolver for LocalSearch {
 
             for (a, b) in candidates {
                 let candidate_graph = graph.flip_edge(&a, &b).expect("Could not flip edge.");
-                let (candidate_length, _) = candidate_graph.critical_path().unwrap();
+                let candidate_length = candidate_graph.critical_length().unwrap();
 
                 if candidate_length < critical_length + temperature {
                     graph = candidate_graph;

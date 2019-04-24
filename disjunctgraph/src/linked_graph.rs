@@ -97,8 +97,7 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
     fn flip_edge(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
         if !self.successors[node_1.id()].contains(&node_2.id()) {
             return Err(GraphError::InvalidEdge);
-        }
-        
+        }        
         
         let node_1 = node_1.id();
         let node_2 = node_2.id();
@@ -109,11 +108,12 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         self.predecessors[node_1].insert(node_2);
         self.successors[node_2].insert(node_1);
         		
-        if self.is_cyclic() {
-            Err(disjunctgraph::GraphError::Cyclic)
-        } else {
-            Ok(self)
-        }
+        // if self.is_cyclic() {
+        //     Err(disjunctgraph::GraphError::Cyclic)
+        // } else {
+        //     Ok(self)
+        // }
+        Ok(self)
 	}
 
     // For now, the better way will probably be to create a topological ordering and go from there

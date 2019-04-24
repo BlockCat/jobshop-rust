@@ -48,7 +48,7 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_la02.txt";
+        let path = "bench_test.txt";
         let problem = Problem::read(path).expect("Could not find path");
         let graph = problem.into_graph();
 

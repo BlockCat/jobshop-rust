@@ -26,18 +26,14 @@ impl Schedule {
 
 
     pub fn from_graph<I: Graph>(problem: Problem, graph: I) -> Schedule {
-        use std::collections::VecDeque;
-
-        let topology = graph.topology();
-        let mut nodes = (0..graph.nodes().len()).collect::<Vec<usize>>();
-        nodes.sort_by_key(|x| std::cmp::Reverse(topology[*x]));
-
+        
         // Starting with the node with the highest topology, the source...
-        let mut starting_times = vec!(0u32; nodes.len());
-        let mut backtracker = vec!(0usize; nodes.len());
+        let nodes = graph.nodes().len();
+        let mut starting_times = vec!(0u32; nodes);
+        let mut backtracker = vec!(0usize; nodes);
 
-        for node in nodes {
-            let predecessors = graph.predecessors(&node);
+        for node in graph.topology1() {
+            let predecessors = graph.predecessors(node);
 
             let nodes = graph.nodes();
             let max_predecessor = predecessors.iter()                
@@ -45,8 +41,8 @@ impl Schedule {
                 .max_by_key(|x| x.1);
 
             if let Some(max_predecessor) = max_predecessor {
-                backtracker[node] = max_predecessor.0;
-                starting_times[node] = max_predecessor.1;
+                backtracker[node.id()] = max_predecessor.0;
+                starting_times[node.id()] = max_predecessor.1;
             }
         }
         
