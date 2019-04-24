@@ -57,8 +57,14 @@ impl<'a, G: Graph> Iterator for TopologyIterator<'a, G> {
                 // If the node is unvisited expand it.
                 Status::Unvisited(current_node) => {
                     if self.node_state[current_node] == 0 { // It's not in stack and not processed
-                        let predecessors = self.graph.predecessors(&current_node);
-                        self.stack.reserve_exact(predecessors.len() + 1);
+
+                        // All predecessors that are not yet processed, and not waiting to be processed
+                        let predecessors = self.graph.predecessors(&current_node) 
+                            .into_iter()
+                            .filter(|x| self.node_state[x.id()] == 0)
+                            .collect::<Vec<_>>();
+                        
+                        self.stack.reserve(predecessors.len() + 1);
                         self.stack.push_back(Status::Visisted(current_node));                        
                         self.stack.extend(predecessors.iter().map(|x| Status::Unvisited(x.id())));                        
                         self.node_state[current_node] |= TOPOLOGY_IN_STACK; // It's now in stack
