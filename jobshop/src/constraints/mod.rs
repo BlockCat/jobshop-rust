@@ -20,7 +20,7 @@ pub struct ProblemConstraints {
 impl ProblemConstraints {
     pub fn new<I: Graph>(graph: &I, upper_bound: u32) -> Result<Self, ConstraintError> {
         
-        let topology = graph.topology1().collect::<Vec<&I::Node>>();
+        let topology = graph.topology().collect::<Vec<&I::Node>>();
         let nodes = graph.nodes();
         
         let mut constraints: Vec<ActivityConstraint> = vec!(ActivityConstraint { left_bound: 0, right_bound: 0 }; nodes.len());

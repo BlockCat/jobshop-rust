@@ -1,4 +1,4 @@
-use crate::problem::{ Activity, Problem, ProblemNode };
+use crate::problem::{ Activity, Problem };
 
 use disjunctgraph::{Graph, NodeId, GraphNode };
 
@@ -32,7 +32,7 @@ impl Schedule {
         let mut starting_times = vec!(0u32; nodes);
         let mut backtracker = vec!(0usize; nodes);
 
-        for node in graph.topology1() {
+        for node in graph.topology() {
             let predecessors = graph.predecessors(node);
 
             let nodes = graph.nodes();
