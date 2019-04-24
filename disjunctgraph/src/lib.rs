@@ -98,7 +98,7 @@ pub trait Graph where Self: Sized {
 
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
 
-        let mut stack = VecDeque::with_capacity(self.nodes().len());
+        let mut stack = VecDeque::with_capacity(self.nodes().len() * 2);
         stack.push_back(Status::Unvisited(self.sink().id()));
 
         TopologyIterator {

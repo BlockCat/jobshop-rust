@@ -1,3 +1,0 @@
-
-// Test utilities
-mod schedule;

@@ -1,10 +1,8 @@
-use std::io::{ BufRead, BufReader };
+use std::io::BufReader;
 use std::fs::File;
 use std::path::Path;
 
-use crate::schedule::Schedule;
-
-use disjunctgraph::{ Graph, NodeId, GraphNode, Relation };
+use disjunctgraph::{ Graph, GraphNode, Relation };
 
 
 pub trait ProblemSolver {
@@ -30,10 +28,8 @@ pub struct Activity {
 
 // To be ran with: https://www.eii.uva.es/elena/JSSP/InstancesJSSP.htm
 impl Problem {
-    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let file = File::open(path).map_err(|_| "Could not read file".to_owned())?;
-        let reader = BufReader::new(file);
 
+    pub fn from_reader<R: std::io::BufRead>(reader: R) -> Result<Self, String> {
         let mut reader = reader.lines().map(|x| x.unwrap());
         
         let jobs = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Machines is not a number")?;
@@ -80,6 +76,13 @@ impl Problem {
         Ok(Problem {
             machines, activities, jobs, optimal,
         })
+    }
+
+    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let file = File::open(path).map_err(|_| "Could not read file".to_owned())?;
+        let reader = BufReader::new(file);
+
+        Problem::from_reader(reader)        
     }
     pub fn into_graph<I: Graph>(&self) -> I {
         let problem = self;

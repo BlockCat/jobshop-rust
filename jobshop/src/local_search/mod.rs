@@ -1,7 +1,6 @@
 use disjunctgraph::{ Graph, GraphNode, NodeId };
 
 use crate::problem::{ ProblemSolver, Problem, ProblemNode };
-use crate::schedule::Schedule;
 
 // In the case of a search, it might be nice to only store partial orientations.
 // As described in https://pure.tue.nl/ws/files/2119953/385216.pdf
@@ -31,7 +30,7 @@ impl ProblemSolver for LocalSearch {
         let mut counter = 0;
         let mut rand = rand::thread_rng();
 
-        while no_improvement_cycles <= 10 {
+        while no_improvement_cycles <= 3 {
 
             counter += 1;
 
@@ -79,5 +78,4 @@ impl ProblemSolver for LocalSearch {
     }
 
 }
-
 
