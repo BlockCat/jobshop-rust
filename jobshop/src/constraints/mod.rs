@@ -6,7 +6,8 @@ pub enum ConstraintError {
 }
 
 #[derive(Clone, Debug)]
-pub struct ActivityConstraint {    
+pub struct ActivityConstraint {
+    pub size: u32,    
     pub left_bound: u32,
     pub right_bound: u32,
 }
@@ -23,9 +24,10 @@ impl ProblemConstraints {
         let topology = graph.topology().collect::<Vec<&I::Node>>();
         let nodes = graph.nodes();
         
-        let mut constraints: Vec<ActivityConstraint> = vec!(ActivityConstraint { left_bound: 0, right_bound: 0 }; nodes.len());
+        let mut constraints: Vec<ActivityConstraint> = vec!(ActivityConstraint { size: 0, left_bound: 0, right_bound: 0 }; nodes.len());
 
         for node in topology.iter() {
+            constraints[node.id()].size = node.weight();
             constraints[node.id()].left_bound = graph.predecessors(*node).iter()
                     .map(|x| constraints[x.id()].left_bound + x.weight())
                     .max().unwrap_or(0);             
@@ -42,12 +44,62 @@ impl ProblemConstraints {
             constraints[node.id()].right_bound = job_predecessor;
         }
 
+        
         let mut problem = ProblemConstraints { upper_bound, constraints };
+
+        
+        let left_bounded = |ccc: &mut ActivityConstraint| {
+            ccc.left_bound = (ccc.right_bound - ccc.size + ccc.left_bound) / 2;
+        };
+        let right_bounded = |ccc: &mut ActivityConstraint| {
+            ccc.right_bound = ((ccc.right_bound - ccc.size + ccc.left_bound) / 2) + ccc.size;
+        };        
+        
         problem.fix_2b_consistency(graph);
-        problem.fix_3b_consistency(graph);
-        println!("Is it temp 3b consistent: {}", problem.check_3b_precedence(graph));
+        problem.fix_3b_consistency(graph);        
         problem.fix_2b_consistency(graph);
 
+        macro_rules! bound {
+            (r $i:expr) => {
+                right_bounded(&mut problem.constraints[$i])
+            };
+            (l $i:expr) => {
+                left_bounded(&mut problem.constraints[$i])
+            }
+        }
+
+        
+        problem.fix_topology(graph, &topology)?;
+        problem.fix_2b_consistency(graph);        
+        
+        for ccc in problem.constraints.iter().enumerate() {            
+            println!("Constraint: {} with length: {}", ccc.0, (ccc.1.right_bound - ccc.1.left_bound));
+        }
+
+        fn task_interval<I: Graph>(constraints: &Vec<ActivityConstraint>, v: &Vec<&I::Node>) -> (u32, u32, u32) {
+            let min = v.iter().map(|x| constraints[x.id()].left_bound).min().unwrap();
+            let max = v.iter().map(|x| constraints[x.id()].right_bound).max().unwrap();
+            let sum = v.iter().map(|x| constraints[x.id()].size).sum::<u32>();
+            (min, max, sum)            
+        }
+
+        // let things = |u: usize| {
+        //     let set1 = graph.disjunctions(&nodes[u]);    
+        //     let t1 = task_interval::<I>(&problem.constraints, &set1);
+        //     println!("Packed n{}: {} - {} < {}", u, t1.1, t1.0, t1.2 + nodes[u].weight());
+
+        //     println!("is_after n{}: {} > max:", 
+        //         u, 
+        //         problem.constraints[u].left_bound + nodes[u].weight()
+        //     );
+        //     for n in set1 {
+        //         println!("{}, ", problem.constraints[n.id()].right_bound - n.weight());
+        //     }
+        // };
+
+        // things(2);
+        // things(4);
+        // things(3);
         // For fun:graph.fix_disjunction(disjunction, node).expect("Could not fix");
 
         nodes.into_iter()
@@ -60,14 +112,48 @@ impl ProblemConstraints {
         Ok(problem)
     }
 
+    fn fix_topology<I: Graph>(&mut self, graph: &I, topology: &Vec<&I::Node>) -> Result<(), ConstraintError> {
+        for node in topology.iter() {            
+            
+            let job_pre = graph.predecessors(*node).iter()
+                    .map(|x| self.constraints[x.id()].left_bound + x.weight())                    
+                    .max().unwrap_or(0);
+
+            self.constraints[node.id()].left_bound = std::cmp::max(self.constraints[node.id()].left_bound, job_pre);
+        }
+
+        for node in topology.iter().rev() {
+            let job_predecessor = graph.successors(*node).iter()
+                    .map(|x| self.constraints[x.id()].right_bound - x.weight())
+                    .min().unwrap_or(self.constraints[node.id()].right_bound);
+            
+            if job_predecessor < self.constraints[node.id()].left_bound + node.weight() {
+                return Err(ConstraintError::Infeasible);
+            }
+            self.constraints[node.id()].right_bound = std::cmp::min(self.constraints[node.id()].right_bound, job_predecessor);
+        }
+
+        Ok(())
+    }
+
+    pub fn score(&self) -> f32 {
+        self.constraints.iter().map(|ccc| {
+            // Maximize overlap? Nope, it works kind of
+            //let overlap = ((ccc.left_bound + ccc.size) - (ccc.right_bound - ccc.size)) as f32;// Not exactly
+
+            // Estimating a makespan would work as. 
+            //let bbb = (self.upper_bound - (ccc.right_bound - ccc.left_bound)) as f32;
+            ccc.right_bound as f32
+        }).sum()
+    }
+
     fn fix_2b_consistency<I: Graph>(&mut self, graph: &I) {
         let nodes = graph.nodes();
         
-        dbg!("This is inefficient, fix_2b_consistency");
+        //dbg!("This is inefficient, fix_2b_consistency");
         while nodes.iter().map(|node| self.fix_2b_consistency_node(graph, node)).any(|x| x) {
             // Do nothing,
-        }
-        
+        }        
     }
 
     fn fix_2b_consistency_node<I: Graph>(&mut self, graph: &I, node: &I::Node) -> bool {
@@ -80,14 +166,14 @@ impl ProblemConstraints {
 
             // Node -> disjunction not possible.
             // Has to be disjunction -> node
-            if !self.check_precedence(node, disjunction) {
+            if !self.check_precedence(node, disjunction) && self.constraints[node.id()].left_bound < est_j + p_j {
                 self.constraints[node.id()].left_bound = est_j + p_j;
                 changed = true;
             }
 
             // Disjunction -> node not possible,
             // has to be node -> disjunction
-            if !self.check_precedence(disjunction, node) {
+            if !self.check_precedence(disjunction, node) && self.constraints[node.id()].right_bound > lst_j {
                 self.constraints[node.id()].right_bound = lst_j;
                 changed = true;
             }
@@ -101,7 +187,7 @@ impl ProblemConstraints {
 
         
         let mut should_continue = true;
-        dbg!("This is inefficient, fix_3b_consistency");
+        //dbg!("This is inefficient, fix_3b_consistency");
         while should_continue {            
             should_continue = nodes.iter().map(|node| self.fix_3b_consistency_node(graph, node)).any(|x| x);
         }
@@ -168,7 +254,7 @@ impl ProblemConstraints {
                                 next_value = path;
                             }
                         }
-                        self.constraints[node.id()].left_bound = next_value;
+                        self.constraints[node.id()].left_bound = dbg!(next_value);
                                                 
                     }
                 }

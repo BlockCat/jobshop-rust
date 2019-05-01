@@ -27,8 +27,10 @@ mod widget_graph;
 mod widget_constraints;
 mod widget_edge_selection;
 
-const UPPER: u32 = 600;
-const TEMP: u32 = 10000;
+const UPPER: u32 = 60;
+const TEMP: u32 = 40000;
+const PATH: &'static str = "bench_test.txt";
+
 #[derive(Msg)]
 pub enum Msg {
     Decrement,
@@ -48,7 +50,7 @@ pub struct Model {
 impl Widget for Win {
 
     fn model() -> Model {
-        let path = "bench_la02.txt";
+        let path = PATH;
         let problem = Problem::read(path).expect("Could not find path");
         let graph = problem.into_graph();
 
@@ -73,14 +75,16 @@ impl Widget for Win {
                 let graph = searcher.solve(&self.model.problem);
                 let end = time::Instant::now();
 
-                println!("Timer: {:?}", end - timer);
-
                 self.model.graph = graph;
                 let (span, _) = self.model.graph.critical_path().expect("Graph is not directed for some reason");
                 self.model.counter = span;
+
+                let problem_constraint = ProblemConstraints::new(&self.model.graph, span).unwrap();
+                //println!("Timer: {:?}", end - timer);
+                println!("{} {}", problem_constraint.score(), span);
                 
                 self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
-                self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), ProblemConstraints::new(&self.model.graph, span).unwrap())));
+                self.constraints.emit(ConstraintsMsg::SetProblem((self.model.problem.clone(), problem_constraint)));
                 self.edge_selection.emit(EdgeMsg::SetProblem(self.model.graph.clone()));
             },
             Msg::Fix(a, b) => {
@@ -88,11 +92,13 @@ impl Widget for Win {
                 let constraints = ProblemConstraints::new(&self.model.graph, UPPER).unwrap();
                 let node_1 = &self.model.graph.nodes()[a];
                 let node_2 = &self.model.graph.nodes()[b];
+                println!("Other score: {}", constraints.score());
                 if constraints.check_precedence(node_1, node_2) {
 
                     let graph = self.model.graph.clone().fix_disjunction(node_1, node_2);
                     if let Ok(graph) = graph {
                         let constraints = ProblemConstraints::new(&graph, UPPER).unwrap();
+                        println!("Other score 2: {}", constraints.score());
                         println!("Is 2b consistent: {}", constraints.check_2b_precedence(&graph));
                         println!("Is 3b consistent: {}", constraints.check_3b_precedence(&graph));
                         
@@ -106,9 +112,7 @@ impl Widget for Win {
                             });
 
                         println!("Is 2b consistent: {}", constraints.check_2b_precedence(&graph));
-                        println!("Is 3b consistent: {}", constraints.check_3b_precedence(&graph));
-
-                        
+                        println!("Is 3b consistent: {}", constraints.check_3b_precedence(&graph));                  
 
                         self.model.graph = graph;
                         self.graph.emit(GraphMsg::SetProblem((self.model.problem.clone(), self.model.graph.clone())));
