@@ -68,7 +68,10 @@ impl ProblemConstraints {
             }
         }
 
-        
+        bound!(r 4);
+        bound!(l 5);
+        bound!(r 6);
+                
         problem.fix_topology(graph, &topology)?;
         problem.fix_2b_consistency(graph);        
         
