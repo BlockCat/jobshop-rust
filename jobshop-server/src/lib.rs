@@ -7,6 +7,7 @@
 extern crate serde;
 
 extern crate rocket_contrib;
+extern crate rocket_cors;
 extern crate disjunctgraph;
 extern crate jobshop;
 
@@ -16,6 +17,9 @@ use rocket::{ Rocket, State };
 use rocket_contrib::json::Json;
 use rocket_contrib::templates::Template;
 
+use rocket::http::Method;
+use rocket_cors::{AllowedHeaders, AllowedOrigins, Error};
+
 use jobshop::problem::{ ProblemNode, Problem };
 
 pub type LinkedGraph = disjunctgraph::LinkedGraph<ProblemNode>; 
@@ -24,10 +28,22 @@ type GraphState = std::sync::Mutex<std::cell::RefCell<Option<ProgramState>>>;
 const graph_paths: [&'static str; 2] = ["bench_test", "bench_la02"];
 
 pub fn create_rocket() -> Rocket {
+    let allowed_origins = AllowedOrigins::all();
+
+    // You can also deserialize this
+    let cors = rocket_cors::CorsOptions {
+        allowed_origins,
+        allowed_methods: vec![Method::Get].into_iter().map(From::from).collect(),
+        allowed_headers: AllowedHeaders::some(&["Authorization", "Accept"]),
+        allow_credentials: true,
+        ..Default::default()
+    }.to_cors().unwrap();
+
     rocket::ignite()
         .attach(Template::fairing())
+        .attach(cors)
         .manage(GraphState::default())
-    .mount("/", routes![index, synchronize, execute_command])
+        .mount("/", routes![index, synchronize, execute_command])
 }
 
 #[get("/")]

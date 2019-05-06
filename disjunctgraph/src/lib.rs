@@ -35,6 +35,7 @@ pub enum Relation {
 const TOPOLOGY_PROCESSED: u8 = 1;
 const TOPOLOGY_IN_STACK: u8 = 2;
 enum Status { Visisted(usize), Unvisited(usize) }
+
 pub struct TopologyIterator<'a, G: Graph> {
     graph: &'a G,
     node_state: Vec<u8>, // processed, in_stack as bitflags
@@ -92,13 +93,13 @@ pub trait Graph where Self: Sized {
     fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
     fn predecessors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
     fn disjunctions(&self, id: &impl NodeId) -> Vec<&Self::Node>;
-    fn fix_disjunction(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
-    fn flip_edge(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
+    fn fix_disjunction(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
+    fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
 
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
 
-        let mut stack = VecDeque::with_capacity(self.nodes().len() * 2);
+        let mut stack = VecDeque::with_capacity(self.nodes().len());
         stack.push_back(Status::Unvisited(self.sink().id()));
 
         TopologyIterator {
@@ -111,11 +112,11 @@ pub trait Graph where Self: Sized {
     fn critical_length(&self) -> std::result::Result<u32, GraphError> {
         
         let mut starting_times = vec!(0u32; self.nodes().len());
+        let nodes = self.nodes();            
         
         for node in self.topology() {
             let predecessors = self.predecessors(node);
 
-            let nodes = self.nodes();            
             starting_times[node.id()] = predecessors.iter()                
                 .map(|x| starting_times[x.id()] + nodes[x.id()].weight())
                 .max().unwrap_or(0);
