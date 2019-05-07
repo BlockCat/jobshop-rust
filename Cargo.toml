@@ -1,5 +1,5 @@
 [workspace]
-members = ["disjunctgraph", "jobshop", "jobshop-server"]
+members = ["disjunctgraph", "jobshop", "jobshop-server", "cpbab"]
 
 [profile.release]
 debug = true

@@ -163,6 +163,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpbab"
+version = "0.1.0"
+dependencies = [
+ "disjunctgraph 0.1.0",
+ "hashbrown 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "deunicode"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
