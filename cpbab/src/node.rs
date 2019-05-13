@@ -26,11 +26,11 @@ impl disjunctgraph::GraphNode for Node {
 }
 
 impl Node {
-    pub fn est(&self) -> Option<u32> {
-        self.est
+    pub fn est(&self) -> u32 {
+        self.est.expect("Could not get earliest starting time!")
     }
 
-    pub fn lct(&self) -> Option<u32> {
-        self.lst.map(|x| x + self.weight)
+    pub fn lct(&self) -> u32 {
+        self.lst.expect("Could not get latest completion time") + self.weight
     }
 }
