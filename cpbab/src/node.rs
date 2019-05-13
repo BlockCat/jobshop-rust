@@ -26,7 +26,11 @@ impl disjunctgraph::GraphNode for Node {
 }
 
 impl Node {
-    pub fn earliest_start_time(&self) -> Option<u32> {
+    pub fn est(&self) -> Option<u32> {
         self.est
+    }
+
+    pub fn lct(&self) -> Option<u32> {
+        self.lst.map(|x| x + self.weight)
     }
 }
