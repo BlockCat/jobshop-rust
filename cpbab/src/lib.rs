@@ -42,12 +42,12 @@ pub fn branch_and_bound(root: CGraph, resources: usize, max_makespan: u32) -> CG
             }
         } else {    
             let g1 = node.clone().fix_disjunction(&t1, &t2).expect("Could not fix disjunction: (t1, t2)");
-            if lower_bound(&g1, max_makespan) < upper_bound {
+            if lower_bound(&g1, max_makespan, &resources) < upper_bound {
                 stack.push_front(g1);
             }
 
             let g2 = node.fix_disjunction(&t2, &t1).expect("Could not fix disjunction: (t2, t1)");
-            if lower_bound(&g2, max_makespan) < upper_bound {
+            if lower_bound(&g2, max_makespan, &resources) < upper_bound {
                 stack.push_front(g2);
             }
         }
@@ -133,8 +133,11 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
     .collect::<Vec<_>>();
 
     if S1.len() <= S2.len() {
-        //let dS = crit.nodes.iter().filter(|x| x.id() != t1.id()).map(|x| x.est()).min().unwrap().unwrap() - t1.est().unwrap();
-        let t: &node::Node = S1.iter().min_by_key(|t| h(t1, t, max_makespan)).unwrap();
+        let delta = crit.nodes.iter()
+            .filter(|x| x.id() != t1.id())
+            .map(|x| x.est()).min().unwrap() - t1.est();
+
+        let t: &node::Node = S1.iter().min_by_key(|t| h(t1, t, max_makespan, crit, delta)).unwrap();
 
         if g(t1, t, max_makespan) <= g(t, t1, max_makespan) {
             (t1, t)
@@ -142,7 +145,10 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
             (t, t1)
         }
     } else {
-        let t: &node::Node = S2.iter().min_by_key(|t| h(t, t2, max_makespan)).unwrap();
+        let delta = t2.lct() - crit.nodes.iter()
+            .filter(|x| x.id() != t2.id())
+            .map(|x| x.lct()).max().unwrap();
+        let t: &node::Node = S2.iter().min_by_key(|t| h(t, t2, max_makespan, crit, delta)).unwrap();
 
         if g(t, t2, max_makespan) <= g(t2, t, max_makespan) {
             (t, t2)
@@ -170,11 +176,13 @@ fn check_precedence(t1: &node::Node, t2: &node::Node) -> bool {
     t1.est() + t1.weight() + t2.weight() <= t2.lct()
 }
 
-fn h(t1: &node::Node, t2: &node::Node, max_makespan: u32) -> u32 {
+
+fn h(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
     let t1b = g(t1, t2, max_makespan);
     let tb1 = g(t2, t1, max_makespan);
 
-    let fff = unimplemented!("Take the change to S into account or something");
+    let new_slack = task_interval.upper - t2.est() - task_interval.processing;
+    let fff = evaluation(new_slack, delta, max_makespan);
 
     if t1b > tb1 || t1b > fff { // Is it bigger than one of them
         t1b
@@ -199,13 +207,13 @@ fn g(t1: &node::Node, t2: &node::Node, allowed_makespan: u32) -> u32 {
     }
 }
 
-fn evaluation(Delta: u32, delta: u32, M: u32) -> u32 {
+fn evaluation(slack: u32, delta: u32, max_makespan: u32) -> u32 {
     if delta == 0 {
-        M
-    } else if Delta < delta {
+        max_makespan
+    } else if slack < delta {
         0
     } else {
-        (Delta - delta).pow(2) / Delta
+        (slack - delta).pow(2) / slack
     }
 }
 
@@ -221,8 +229,27 @@ fn NC(task_interval: &TaskInterval) -> usize {
     std::cmp::min(task_interval.nc_start.len(),  task_interval.nc_end.len())
 }
 
-// According to: Adjustment of heads and tails for the job-shop problem (J. Carlier and E. Pinson)
-// Chapter 4.4: Lower bound
-fn lower_bound(graph: &CGraph, max_makespan: u32) -> u32 {
-    unimplemented!("Lower bound cannot be calculated")
+/// According to: Adjustment of heads and tails for the job-shop problem (J. Carlier and E. Pinson)
+/// Chapter 4.4: Lower bound
+/// Warning: Does not implement all three bounds.
+fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {
+    use itertools::Itertools;
+    //unimplemented!("Lower bound cannot be calculated")
+    let resources = resources.iter()
+        .map(|resource| graph.nodes().iter().filter(move |n| n.machine_id() == Some(*resource as u32))) // Returns an I_k on machine M_k
+        .collect::<Vec<_>>();
+        
+    let d1 = resources.into_iter()
+        .flat_map(|resource| resource.combinations(2)) // Take all combinations of 2
+        .map(|comb| {
+            let n1 = &comb[0];
+            let n2 = &comb[1];
+
+            let a = n1.est() + n1.weight() + n2.weight() + n2.lct();
+            let b = n2.est() + n2.weight() + n1.weight() + n1.lct();
+            std::cmp::max(a, b)
+        })
+        .filter(|d| d <= &max_makespan)
+        .max().unwrap();
+    d1 - 1
 }
