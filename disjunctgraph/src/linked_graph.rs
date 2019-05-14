@@ -140,3 +140,9 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         }
 	}
 }
+
+impl <T: NodeId + Clone> LinkedGraph<T> {
+    pub fn has_disjunctions(&self) -> bool {
+        self.nodes.iter().any(|node| !self.disjunctions[node.id()].is_empty())
+    }
+}

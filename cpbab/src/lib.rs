@@ -2,6 +2,8 @@ extern crate disjunctgraph;
 
 mod node;
 
+use std::collections::VecDeque;
+
 use disjunctgraph::{ GraphNode, NodeId, Graph };
 
 // Constrained graph ;)
@@ -9,11 +11,49 @@ type CGraph = disjunctgraph::LinkedGraph<node::Node>;
 
 const PAR: u32 = 3;
 
+// What is still needed?
+// There is no propagation of constraints,
+// Methods are still unimplemented.
+pub fn branch_and_bound(root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
 
-pub fn branch_and_bound() {
-    loop {
 
+    let mut upper_bound = max_makespan;
+    let mut current_best = root.clone();
+
+    let mut stack: VecDeque<CGraph> = VecDeque::new();
+    stack.push_front(root);
+
+    let resources = (0..resources).collect::<Vec<_>>();
+
+    while !stack.is_empty() {
+        let node = stack.pop_front().unwrap();
+        let (t1, t2) = {
+            let (t1, t2) = next_pair(&resources, &node, upper_bound);
+            (t1.id(), t2.id())
+        };
+
+        // Check if graph has disjunctions left.
+        if !node.has_disjunctions() {
+            // We are a complete schedule!
+            let length = node.critical_length().expect("Could not calculate critical length");
+            if length < upper_bound {
+                upper_bound = length;
+                current_best = node;
+            }
+        } else {    
+            let g1 = node.clone().fix_disjunction(&t1, &t2).expect("Could not fix disjunction: (t1, t2)");
+            if lower_bound(&g1, max_makespan) < upper_bound {
+                stack.push_front(g1);
+            }
+
+            let g2 = node.fix_disjunction(&t2, &t1).expect("Could not fix disjunction: (t2, t1)");
+            if lower_bound(&g2, max_makespan) < upper_bound {
+                stack.push_front(g2);
+            }
+        }
     }
+
+    current_best
 }
 
 struct TaskInterval<'a> {
@@ -38,32 +78,28 @@ impl<'a> TaskInterval<'a> {
             node.est() >= lower && node.lct() <= upper
         }).collect();
 
+        let lower = nodes.iter().map(|x| x.est()).min().unwrap();
+        let upper = nodes.iter().map(|x| x.lct()).max().unwrap();
+
         let processing = nodes.iter().map(|x| x.weight()).sum();
 
+        // Calculate nc_start: 
+        // NC start is the set of jobs that can be executed before all jobs in S. This is the edge finding part in the paper:
+        // say we have a job t, if up(S) - low(t) - p(S) >= 0 => t can be first
+        // up(S) - low(t) - p(S) >= 0 => up(S) >= low(t) + p(S)
+
+        let nc_start = nodes.iter().filter(|node| upper >= node.est() + processing).cloned().collect();
+
+        // Calculate nc_end
+        // NC end is the set of jobs that can be executed after all jobs in S.
+        // we have job t: up(t) - p(S) >= low(S) => t can be last
+        // up(t) - p(S) >= low(S) ========> up(t) >= low(S) + p(S)
+        let nc_end = nodes.iter().filter(|node| node.lct() >= lower + processing).cloned().collect();
         TaskInterval {
             resource, upper, lower, processing, nodes,
-            nc_start: unimplemented!(),
-            nc_end: unimplemented!(),
+            nc_start, nc_end
         }
     }
-}
-
-/// Calculate the slack for all operations on a resource
-fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
-    let (min, max, p) = graph.nodes().iter()
-        .filter(|x| x.machine_id() == Some(resource as u32))
-        .fold((std::u32::MAX, 0, 0), |(min, max, p), x| {
-            let min = std::cmp::min(min, x.est());
-            let max = std::cmp::max(max, x.lct());
-            let p = p + x.weight();
-            (min, max, p)
-        });
-    max - min - p
-}
-
-/// Can order nodes t1 and t2: t1 -> t2 (t1 before t2)
-fn check_precedence(t1: &node::Node, t2: &node::Node) -> bool {
-    t1.est() + t1.weight() + t2.weight() <= t2.lct()
 }
 
 fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (&'a node::Node, &'a node::Node) {
@@ -116,6 +152,24 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
     }
 }
 
+/// Calculate the slack for all operations on a resource
+fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
+    let (min, max, p) = graph.nodes().iter()
+        .filter(|x| x.machine_id() == Some(resource as u32))
+        .fold((std::u32::MAX, 0, 0), |(min, max, p), x| {
+            let min = std::cmp::min(min, x.est());
+            let max = std::cmp::max(max, x.lct());
+            let p = p + x.weight();
+            (min, max, p)
+        });
+    max - min - p
+}
+
+/// Can order nodes t1 and t2: t1 -> t2 (t1 before t2)
+fn check_precedence(t1: &node::Node, t2: &node::Node) -> bool {
+    t1.est() + t1.weight() + t2.weight() <= t2.lct()
+}
+
 fn h(t1: &node::Node, t2: &node::Node, max_makespan: u32) -> u32 {
     let t1b = g(t1, t2, max_makespan);
     let tb1 = g(t2, t1, max_makespan);
@@ -156,7 +210,7 @@ fn evaluation(Delta: u32, delta: u32, M: u32) -> u32 {
 }
 
 fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
-    let task_intervals: Vec<TaskInterval<'a>> = unimplemented!();
+    let task_intervals: Vec<TaskInterval<'a>> = unimplemented!("Task intervals not yet created");
 
     task_intervals.into_iter()        
         .min_by_key(|x| x.slack() * NC(x) as u32)
@@ -169,6 +223,6 @@ fn NC(task_interval: &TaskInterval) -> usize {
 
 // According to: Adjustment of heads and tails for the job-shop problem (J. Carlier and E. Pinson)
 // Chapter 4.4: Lower bound
-fn lower_bound() -> u32 {
-    unimplemented!()
+fn lower_bound(graph: &CGraph, max_makespan: u32) -> u32 {
+    unimplemented!("Lower bound cannot be calculated")
 }
