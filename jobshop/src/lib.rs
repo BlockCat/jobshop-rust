@@ -3,6 +3,7 @@ extern crate test;
 
 pub mod problem;
 pub mod local_search;
+pub mod cpbab;
 //pub mod branch_and_bound;
 pub mod constraints;
 pub mod schedule;
@@ -10,21 +11,22 @@ pub mod schedule;
 #[cfg(test)]
 mod tests {
     use crate::local_search::LocalSearch;
+    use crate::cpbab::CPBAB;
     use crate::problem::{ Problem, ProblemSolver };
     use test::Bencher;
 
-    #[bench]
+    #[test]
+    fn test_cpbab() {
+        use disjunctgraph::Graph;
+        let problem = small_problem();
+        let l = CPBAB::new().solve(&problem).critical_length().unwrap();
+        assert_eq!(13, l);
+    }
+
+    /*#[bench]
     fn bench_local_search_small(b: &mut Bencher) {
         
-        let problem = Problem::from_reader(r"3
-3
-13
-3 2 3
-3 4
-6 3 2
-1 2 3
-3 2
-2 1 3".as_bytes()).unwrap();
+        let problem = small_problem();
         let solver = LocalSearch::new(20);
 
         b.iter(|| solver.solve(&problem));
@@ -33,7 +35,26 @@ mod tests {
     #[bench]
     fn bench_local_search_large(b: &mut Bencher) {
         
-        let problem = Problem::from_reader(r"10
+        let problem = big_problem();
+        let solver = LocalSearch::new(10000);
+
+        b.iter(|| solver.solve(&problem));
+    }*/
+
+    fn small_problem() -> Problem {
+        Problem::from_reader(r"3
+3
+13
+3 2 3
+3 4
+6 3 2
+1 2 3
+3 2
+2 1 3".as_bytes()).unwrap()
+    }
+
+    fn big_problem() -> Problem {
+        Problem::from_reader(r"10
 5
 666
 53 21 34 55 95
@@ -56,10 +77,6 @@ mod tests {
 3 1 2 4 5
 4 2 5 1 3
 5 4 3 2 1
-".as_bytes()).unwrap();
-        let solver = LocalSearch::new(10000);
-
-        b.iter(|| solver.solve(&problem));
+".as_bytes()).unwrap()
     }
-
 }

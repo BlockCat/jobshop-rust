@@ -9,4 +9,5 @@ dot = "0.1.4"
 rand = "0.6.5"
 hashbrown = "0.3"
 itertools = "0.8.0"
-disjunctgraph = { path = "../disjunctgraph"}
+disjunctgraph = { path = "../disjunctgraph" }
+cpbab = { path = "../cpbab" }
