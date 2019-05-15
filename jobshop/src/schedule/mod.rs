@@ -24,6 +24,17 @@ impl Schedule {
         unimplemented!();
     }
 
+    pub fn pretty_print(&self) {
+        for (id, job) in self.jobs.iter().enumerate() {
+            print!("job {}: ", id);
+            for activity in job {
+                let act = &self.activities[*activity];
+                print!("({}, {})", act.starting_time, act.starting_time + act.activity.process_time);
+            }
+            println!();
+        }
+    }
+
 
     pub fn from_graph<I: Graph>(problem: Problem, graph: I) -> Schedule {
         

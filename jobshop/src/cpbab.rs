@@ -19,10 +19,10 @@ impl ProblemSolver for CPBAB {
     type Solution = cpbab::CGraph;
 
     fn solve(&self, problem: &Problem) -> Self::Solution {
-        let mm = crate::local_search::LocalSearch::new(100)
+        /*let mm = crate::local_search::LocalSearch::new(100)
             .solve(problem)
-            .critical_length().unwrap();
+            .critical_length().unwrap();*/
         let graph = problem.into_graph();
-        cpbab::branch_and_bound(graph, problem.machines as usize, mm)
+        cpbab::branch_and_bound(graph, problem.machines as usize, 30)
     }
 }

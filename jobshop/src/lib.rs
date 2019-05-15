@@ -19,8 +19,12 @@ mod tests {
     fn test_cpbab() {
         use disjunctgraph::Graph;
         let problem = small_problem();
-        let l = CPBAB::new().solve(&problem).critical_length().unwrap();
-        assert_eq!(13, l);
+        let l = CPBAB::new().solve(&problem);
+
+        let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
+        println!("Completed: {}", !l.has_disjunctions());
+        schedule.pretty_print();
+        assert_eq!(13, l.critical_length().unwrap());
     }
 
     /*#[bench]
