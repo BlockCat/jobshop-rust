@@ -32,8 +32,8 @@ impl Problem {
     pub fn from_reader<R: std::io::BufRead>(reader: R) -> Result<Self, String> {
         let mut reader = reader.lines().map(|x| x.unwrap());
         
-        let jobs = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Machines is not a number")?;
-        let machines = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Jobs is not a number")?;
+        let jobs = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Jobs is not a number")?;
+        let machines = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("Machines is not a number")?;
         let optimal = reader.next().and_then(|x| x.parse::<u32>().ok()).ok_or("No optimal given")?;
 
         // Read activity processing times

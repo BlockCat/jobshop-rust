@@ -5,7 +5,7 @@ pub mod problem;
 pub mod local_search;
 pub mod cpbab;
 //pub mod branch_and_bound;
-pub mod constraints;
+//pub mod constraints;
 pub mod schedule;
 
 #[cfg(test)]
@@ -16,7 +16,20 @@ mod tests {
     use test::Bencher;
 
     #[test]
-    fn test_cpbab() {
+    fn test_cpbab_1() {
+        use disjunctgraph::Graph;
+        let problem = debug_problem();
+        let l = CPBAB::new().solve(&problem);
+
+        let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
+        println!("Completed: {}", !l.has_disjunctions());
+        schedule.pretty_print();
+        assert_eq!(11, l.critical_length().unwrap());
+    }
+
+
+    #[test]
+    fn test_cpbab_2() {
         use disjunctgraph::Graph;
         let problem = small_problem();
         let l = CPBAB::new().solve(&problem);
@@ -45,6 +58,15 @@ mod tests {
         b.iter(|| solver.solve(&problem));
     }*/
 
+    fn debug_problem() -> Problem {
+        Problem::from_reader(r"2
+2
+11
+2 7 2
+4 3
+1 2 1
+2 1".as_bytes()).unwrap()
+    }
     fn small_problem() -> Problem {
         Problem::from_reader(r"3
 3

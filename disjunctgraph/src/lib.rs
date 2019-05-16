@@ -14,6 +14,12 @@ pub trait NodeId {
     fn id(&self) -> usize;
 }
 
+impl NodeId for usize {
+    fn id(&self) -> usize {
+        *self
+    }
+}
+
 pub trait GraphNode: NodeId {
     fn create(id: usize, weight: u32, machine_id: Option<u32>, job_id: Option<usize>) -> Self;
     fn weight(&self) -> u32;
@@ -21,11 +27,14 @@ pub trait GraphNode: NodeId {
     fn machine_id(&self) -> Option<u32>;
 }
 
-impl NodeId for usize {
-    fn id(&self) -> usize {
-        *self
-    }
+pub trait ConstrainedNode: GraphNode {
+    fn set_est(&mut self, est: u32);
+    fn set_lct(&mut self, lct: u32);
+
+    fn est(&self) -> u32;
+    fn lct(&self) -> u32;
 }
+
 
 #[derive(Clone, PartialEq)]
 pub enum Relation {
@@ -88,6 +97,7 @@ pub trait Graph where Self: Sized {
     type Node: NodeId + GraphNode;
     fn create(nodes: Vec<Self::Node>, edges: Vec<Vec<Relation>>) -> Self;
     fn nodes(&self) -> &[Self::Node];
+    fn nodes_mut(&mut self) -> &mut [Self::Node];
     fn source(&self) -> &Self::Node;
     fn sink(&self) -> &Self::Node;
     fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
@@ -97,6 +107,7 @@ pub trait Graph where Self: Sized {
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
 
+    /// Retrieves topology ordering in the graph, starting at the source, ending at the sink.
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
 
         let mut stack = VecDeque::with_capacity(self.nodes().len());

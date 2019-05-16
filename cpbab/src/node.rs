@@ -25,12 +25,20 @@ impl disjunctgraph::GraphNode for Node {
     fn machine_id(&self) -> Option<u32> {self.machine_id }
 }
 
-impl Node {
-    pub fn est(&self) -> u32 {
+impl disjunctgraph::ConstrainedNode for Node {
+    fn set_est(&mut self, est: u32) {
+        self.est = Some(est);
+    }
+    
+    fn est(&self) -> u32 {
         self.est.expect("Could not get earliest starting time!")
     }
 
-    pub fn lct(&self) -> u32 {
+    fn set_lct(&mut self, lct: u32) {
+        self.lst = Some(lct - self.weight);
+    }
+    
+    fn lct(&self) -> u32 {
         self.lst.expect("Could not get latest completion time") + self.weight
     }
 }
