@@ -163,7 +163,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
     // Find the resource with the most constrained task interval
     let (crit, _) = criticals.iter().zip(resource_slacks)
         .map(|(cr, rr)| {
-            (cr, cr.slack() as u32 * rr * std::cmp::min(PAR, NC(cr) as u32))
+            (cr, cr.slack() as u32 * rr * std::cmp::min(PAR, num_choices(cr) as u32))
         })
         .filter(|(_, rr)| *rr > 0)
         .min_by_key(|(_, rr)| *rr)
@@ -259,7 +259,7 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
     task_intervals.into_iter()
         .filter(|x| x.nodes.len() > 1)
         //.inspect(|x| println!("\n\n{} - task intervals: {:?}", resource_id, x))
-        .min_by_key(|x| x.slack() as u32 * NC(x) as u32)
+        .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32)
         .expect(&format!("Cannot find task intervals: r-{}", resource_id))
     
 }
@@ -319,7 +319,7 @@ fn evaluation(slack: u32, delta: u32, max_makespan: u32) -> u32 {
 }
 
 
-fn NC(task_interval: &TaskInterval) -> usize {
+fn num_choices(task_interval: &TaskInterval) -> usize {
     std::cmp::min(task_interval.nc_start.len(),  task_interval.nc_end.len())
 }
 

@@ -1,14 +1,8 @@
-use disjunctgraph::{ Graph, GraphNode, NodeId };
-use hashbrown::HashSet;
-use std::collections::VecDeque;
-
-use crate::problem::{ ProblemSolver, Problem, ProblemNode };
+use crate::problem::{ ProblemSolver, Problem };
 
 // In the case of a search, it might be nice to only store partial orientations.
 // As described in https://pure.tue.nl/ws/files/2119953/385216.pdf
 pub struct CPBAB;
-
-type LinkedGraph = disjunctgraph::LinkedGraph<ProblemNode>;
 
 impl CPBAB {
     pub fn new() -> Self {

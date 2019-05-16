@@ -18,14 +18,14 @@ use rocket_contrib::json::Json;
 use rocket_contrib::templates::Template;
 
 use rocket::http::Method;
-use rocket_cors::{AllowedHeaders, AllowedOrigins, Error};
+use rocket_cors::{AllowedHeaders, AllowedOrigins };
 
 use jobshop::problem::{ ProblemNode, Problem };
 
 pub type LinkedGraph = disjunctgraph::LinkedGraph<ProblemNode>; 
 type GraphState = std::sync::Mutex<std::cell::RefCell<Option<ProgramState>>>;
 
-const graph_paths: [&'static str; 2] = ["bench_test", "bench_la02"];
+const GRAPH_PATHS: [&'static str; 2] = ["bench_test", "bench_la02"];
 
 pub fn create_rocket() -> Rocket {
     let allowed_origins = AllowedOrigins::all();
@@ -54,7 +54,7 @@ fn index() -> Template {
 
 #[get("/exec/<command>")]
 fn execute_command(command: String, state: State<GraphState>) -> rocket::http::Status {
-    use clap::{Arg, App, SubCommand };
+    use clap::{Arg, App };
 
     let mut program = vec!("jobshop-server");
     program.extend(command.split(" "));
@@ -74,7 +74,7 @@ fn execute_command(command: String, state: State<GraphState>) -> rocket::http::S
         )
         .get_matches_from(program);
 
-    if let Some(matches) = matches.subcommand_matches("reset") {
+    if let Some(_) = matches.subcommand_matches("reset") {
         return reset(state);
     }   
 
@@ -101,12 +101,12 @@ fn reset(state: State<GraphState>) -> rocket::http::Status {
 }
 
 fn load(index: usize, state: State<GraphState>) -> rocket::http::Status {
-    if index >= graph_paths.len() {
+    if index >= GRAPH_PATHS.len() {
         return rocket::http::Status::new(400, "Problem does not exist");
     }
 
     
-    let problem = Problem::read(format!("{}.txt", graph_paths[index])).expect("Could not read problem");
+    let problem = Problem::read(format!("{}.txt", GRAPH_PATHS[index])).expect("Could not read problem");
     let graph = problem.into_graph::<LinkedGraph>();
 
     let program_state = ProgramState { problem, graph };
