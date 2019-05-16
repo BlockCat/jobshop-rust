@@ -23,7 +23,7 @@ mod tests {
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
         schedule.pretty_print();
-        assert_eq!(11, l.critical_length().unwrap());
+        assert_eq!(13, l.critical_length().unwrap());
     }
 
 
@@ -72,7 +72,7 @@ mod tests {
     fn debug_problem() -> Problem {
         Problem::from_reader(r"2
 2
-11
+13
 2 7 2
 4 3
 1 2 1

@@ -174,18 +174,18 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
     
     let crit_slack = crit.slack();
 
-    let s1 = graph.nodes().iter()
+    let s1 = crit.nodes.iter()
         .filter(|t| t.id() != t1.id())
         //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))
         .filter(|t| t.est() <= t1.est() + crit_slack as u32)
-        .filter(|t| graph.has_disjunction(*t1, *t)) // The nodes can be ordered, and are on the same resource    
+        .filter(|t| graph.has_disjunction(*t1, **t)) // The nodes can be ordered, and are on the same resource    
     .collect::<Vec<_>>();
     
-    let s2 = graph.nodes().iter()
+    let s2 = crit.nodes.iter()
         .filter(|t| t.id() != t2.id())
         //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))
         .filter(|t| t.lct() + crit_slack as u32 >= t2.lct())
-        .filter(|t| graph.has_disjunction(*t, *t2))
+        .filter(|t| graph.has_disjunction(**t, *t2))
     .collect::<Vec<_>>();
 
     println!("\nCritical:\n {:#?}", crit.nodes);
