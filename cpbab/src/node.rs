@@ -27,6 +27,10 @@ impl disjunctgraph::GraphNode for Node {
 
 impl disjunctgraph::ConstrainedNode for Node {
     fn set_est(&mut self, est: u32) {
+        debug_assert!(match self.lst {
+                Some(lst) => lst >= est,
+                None => true
+        });
         self.est = Some(est);
     }
     
@@ -35,6 +39,11 @@ impl disjunctgraph::ConstrainedNode for Node {
     }
 
     fn set_lct(&mut self, lct: u32) {
+        debug_assert!(lct >= self.weight);
+        debug_assert!(match self.est {
+            Some(est) => lct - self.weight >= est,
+            None => true
+        }, "wrong lst: {} for {:?}", lct - self.weight, self);
         self.lst = Some(lct - self.weight);
     }
     

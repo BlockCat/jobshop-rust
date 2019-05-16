@@ -5,6 +5,7 @@ mod node;
 use std::collections::VecDeque;
 
 use disjunctgraph::{ GraphNode, ConstrainedNode, NodeId, Graph };
+use itertools::Itertools;
 
 // Constrained graph ;
 pub type CGraph = disjunctgraph::LinkedGraph<node::Node>;
@@ -16,7 +17,7 @@ const PAR: u32 = 3;
 // Operations that have no disjunctions left are looked at too.
 // I believe cycles can occur? ()
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
-    root.init_weights(max_makespan);
+    root.init_weights(max_makespan).expect("Problem with makespan is not feasible");
     
     let mut upper_bound = max_makespan;
     let mut current_best = root.clone();
@@ -44,15 +45,17 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             };
 
             let mut g1 = node.clone().fix_disjunction(&t1, &t2).expect("Could not fix disjunction: (t1, t2)");
-            g1.propagate(&t1);
-            if dbg!(lower_bound(&g1, max_makespan, &resources)) < dbg!(upper_bound) {
-                stack.push_front(g1);
+            if g1.propagate(&t1).is_ok() {
+                if lower_bound(&g1, max_makespan, &resources) < upper_bound {
+                    stack.push_front(g1);
+                }
             }
 
             let mut g2 = node.fix_disjunction(&t2, &t1).expect("Could not fix disjunction: (t2, t1)");
-            g2.propagate(&t2);
-            if dbg!(lower_bound(&g2, max_makespan, &resources)) < dbg!(upper_bound) {
-                stack.push_front(g2);
+            if g2.propagate(&t2).is_ok() {
+                if lower_bound(&g2, max_makespan, &resources) < upper_bound {
+                    stack.push_front(g2);
+                }
             }
         }
     }
@@ -97,11 +100,17 @@ impl<'a> TaskInterval<'a> {
         // NC start is the set of jobs that can be executed before all jobs in S. This is the edge finding part in the paper:
         // say we have a job t, if up(S) - low(t) - p(S) >= 0 => t can be first
         // up(S) - low(t) - p(S) >= 0 => up(S) >= low(t) + p(S)
-        // If t was the first in the interval, is there enough space to execute the other nodes?        
+        // If t was the first in the interval, is there enough space to execute the other nodes?
 
         let nc_start = nodes.iter()
             .filter(|node| upper.lct() >= node.est() + processing)            
-            .cloned().collect();
+            .collect::<Vec<_>>();
+
+        // Keep nodes that have no predecessor on the same resource        
+        let nc_start = nc_start.iter()
+            .filter(|node| nc_start.iter().all(|other| !graph.has_precedence(**other, ***node)))
+            .map(|x| **x)
+            .collect::<Vec<_>>();
 
         // Calculate nc_end
         // NC end is the set of jobs that can be executed after all jobs in S.
@@ -111,7 +120,13 @@ impl<'a> TaskInterval<'a> {
         
         let nc_end = nodes.iter()
             .filter(|node| node.lct() >= lower.est() + processing)            
-            .cloned().collect();
+            .collect::<Vec<_>>();
+
+        // Keep nodes that have no successor on the same resource 
+        let nc_end = nc_end.iter()
+            .filter(|node| nc_end.iter().all(|other| !graph.has_precedence(***node, **other)))
+            .map(|x| **x)
+            .collect::<Vec<_>>();
 
         let ti = TaskInterval {
             upper: upper.lct(), 
@@ -120,10 +135,9 @@ impl<'a> TaskInterval<'a> {
             nc_start, nc_end
         };
 
-
-        assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
-        assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
-        assert!(ti.feasible(), "Failed feasible: {:?}", ti);
+        debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
+        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
+        debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
 
         Some(ti)
     }
@@ -158,29 +172,27 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
     let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
     let t2 = crit.nodes.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
-    //let crit_slack = crit.slack();
+    let crit_slack = crit.slack();
 
-    let s1 = crit.nc_start.iter()
+    let s1 = graph.nodes().iter()
         .filter(|t| t.id() != t1.id())
-        .inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))
-        //.filter(|t| t.est() <= t1.est() + crit_slack as u32)
-        .filter(|t| graph.has_disjunction(*t1, **t))
+        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))
+        .filter(|t| t.est() <= t1.est() + crit_slack as u32)
+        .filter(|t| graph.has_disjunction(*t1, *t)) // The nodes can be ordered, and are on the same resource    
     .collect::<Vec<_>>();
     
-    let s2 = crit.nc_end.iter()
+    let s2 = graph.nodes().iter()
         .filter(|t| t.id() != t2.id())
-        .inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))
-        //.filter(|t| t.lct() + crit_slack as u32 >= t2.lct())
-        .filter(|t| graph.has_disjunction(**t, *t2))
+        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))
+        .filter(|t| t.lct() + crit_slack as u32 >= t2.lct())
+        .filter(|t| graph.has_disjunction(*t, *t2))
     .collect::<Vec<_>>();
 
-    println!("S1: {:?}", crit.nc_start.len());
-    println!("--- {:?}", s1.len());
-    println!("S2: {:?}", crit.nc_end.len());
-    println!("--- {:?}", s2.len());
+    println!("\nCritical:\n {:#?}", crit.nodes);
+    println!("\nStart: \n{:?}", crit.nc_start);
+    println!("\ns1: \n{:?}", s1);
 
-
-    if s1.len() > s2.len() {
+    if s1.len() <= s2.len() {
         let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
@@ -209,13 +221,11 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
 
 /// Find the critical on a resource, if there is no found then there inconsistency
 fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
-    use itertools::Itertools;
     
     let resource = graph.nodes().iter()
-        .filter(|n| n.machine_id() == Some(resource_id as u32))        
+        .filter(|n| n.machine_id() == Some(resource_id as u32))
+        .filter(|n| graph.node_has_disjunction(*n))
         .collect_vec();
-
-    println!("critical: {}", resource.len());
     
     let ests = resource.iter().sorted_by_key(|n| n.est()).collect::<Vec<_>>();
     let lcts = resource.iter().sorted_by_key(|n| n.lct()).collect::<Vec<_>>();
@@ -231,7 +241,7 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
         }
         for j in j..resource.len() {
             let upper = lcts[j];
-            if lower.est() < upper.lct() {                
+            if lower.est() < upper.lct() {
                 if let Some(ti) = TaskInterval::from_interval(graph, &resource, lower, upper) {
                     task_intervals.push(ti);
                 }
@@ -239,7 +249,7 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
         }
     }
 
-    assert!(task_intervals.len() >= 1, "Not enough tasks found: {}\necsts: {:?}\n lcts: {:?}", 
+    debug_assert!(task_intervals.len() >= 1, "Not enough tasks found: {}\necsts: {:?}\n lcts: {:?}", 
         task_intervals.len(),
         ests,
         lcts
@@ -249,7 +259,7 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
     task_intervals.into_iter()
         .filter(|x| x.nodes.len() > 1)
         //.inspect(|x| println!("\n\n{} - task intervals: {:?}", resource_id, x))
-        .min_by_key(|x| dbg!(x.slack() as u32 * NC(x) as u32))        
+        .min_by_key(|x| x.slack() as u32 * NC(x) as u32)
         .expect(&format!("Cannot find task intervals: r-{}", resource_id))
     
 }
@@ -266,15 +276,6 @@ fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
         });
     max - min - p
 }
-
-/// There is no precedence yet
-#[inline]
-fn has_precedence(graph: &CGraph, t1: &node::Node, t2: &node::Node) -> bool {
-    /// Can order nodes t1 and t2: t1 -> t2 (t1 before t2)
-    // t1.est() + t1.weight() + t2.weight() <= t2.lct()
-    !graph.has_disjunction(t1, t2)
-}
-
 
 fn h(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
     let t1b = g(t1, t2, max_makespan);
@@ -325,8 +326,7 @@ fn NC(task_interval: &TaskInterval) -> usize {
 /// According to: Adjustment of heads and tails for the job-shop problem (J. Carlier and E. Pinson)
 /// Chapter 4.4: Lower bound
 /// Warning: Does not implement all three bounds.
-fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {
-    use itertools::Itertools;    
+fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {    
     let resources = resources.iter()
         .map(|resource| graph.nodes().iter().filter(move |n| n.machine_id() == Some(*resource as u32))) // Returns an I_k on machine M_k
         .collect::<Vec<_>>();
@@ -342,7 +342,6 @@ fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {
             std::cmp::max(a, b)
         })        
         .filter(|d| d <= &max_makespan)
-        .inspect(|d| println!("lower: {}", d))
         .max().unwrap_or(max_makespan + 1);
     d1 - 1
 }

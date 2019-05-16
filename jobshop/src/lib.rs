@@ -9,8 +9,7 @@ pub mod cpbab;
 pub mod schedule;
 
 #[cfg(test)]
-mod tests {
-    use crate::local_search::LocalSearch;
+mod tests {    
     use crate::cpbab::CPBAB;
     use crate::problem::{ Problem, ProblemSolver };
     use test::Bencher;
@@ -39,10 +38,22 @@ mod tests {
         schedule.pretty_print();
         assert_eq!(13, l.critical_length().unwrap());
     }
+    
+    /*#[test]
+    fn test_cpbab_3() {
+        use disjunctgraph::Graph;
+        let problem = big_problem();
+        let l = CPBAB::new().solve(&problem);
+
+        let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
+        println!("Completed: {}", !l.has_disjunctions());
+        schedule.pretty_print();
+        assert_eq!(13, l.critical_length().unwrap());
+    }*/
 
     /*#[bench]
     fn bench_local_search_small(b: &mut Bencher) {
-        
+        use crate::local_search::LocalSearch;
         let problem = small_problem();
         let solver = LocalSearch::new(20);
 
@@ -51,7 +62,7 @@ mod tests {
 
     #[bench]
     fn bench_local_search_large(b: &mut Bencher) {
-        
+        use crate::local_search::LocalSearch;
         let problem = big_problem();
         let solver = LocalSearch::new(10000);
 

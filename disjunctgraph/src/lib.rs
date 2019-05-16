@@ -106,6 +106,7 @@ pub trait Graph where Self: Sized {
     fn fix_disjunction(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
+    fn node_mut(&mut self, id: usize) -> &mut Self::Node;
 
     /// Retrieves topology ordering in the graph, starting at the source, ending at the sink.
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
@@ -197,5 +198,27 @@ pub trait Graph where Self: Sized {
             }
         }
         false
+    }
+
+    fn init_weights(&mut self, max_makespan: u32) -> Result<(), ()>
+    where Self::Node: ConstrainedNode {        
+        let topology = self.topology().map(|x| x.id()).collect::<Vec<_>>();
+
+        for node in &topology {
+            let head = self.predecessors(node).into_iter().map(|x| x.est() + x.weight()).max().unwrap_or(0);
+            self.node_mut(*node).set_est(head);
+        }
+
+        for node in topology.iter().rev() {
+            let tail = self.successors(node).into_iter().map(|x| x.lct() - x.weight()).min().unwrap_or(max_makespan);
+            let n = &self.nodes()[*node];
+            if tail - n.weight() >= n.est() {
+                self.node_mut(*node).set_lct(tail);
+            } else {
+                return Err(());
+            }
+        }
+
+        Ok(())
     }
 }
