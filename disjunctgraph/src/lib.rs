@@ -85,13 +85,24 @@ impl<'a, G: Graph> Iterator for TopologyIterator<'a, G> {
                     if (self.node_state[current_node] & TOPOLOGY_PROCESSED) == 0 {
                         // Set node to be not in stack but yes processed
                         self.node_state[current_node] = TOPOLOGY_PROCESSED;                        
-                        return Some(&self.graph.nodes()[current_node]);
+                        return Some(&self.graph.nodes()[current_node]);                        
                     }
                 }
             }
         }
     }
 }
+
+pub struct NodeIterator<'a, G: Graph>(Box<dyn Iterator<Item = &'a G::Node> + 'a>);
+
+impl<'a, G:Graph> Iterator for NodeIterator<'a, G> {
+    type Item = &'a G::Node;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
 
 pub trait Graph where Self: Sized {
     type Node: NodeId + GraphNode;
@@ -100,9 +111,10 @@ pub trait Graph where Self: Sized {
     fn nodes_mut(&mut self) -> &mut [Self::Node];
     fn source(&self) -> &Self::Node;
     fn sink(&self) -> &Self::Node;
-    fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
-    fn predecessors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
-    fn disjunctions(&self, id: &impl NodeId) -> Vec<&Self::Node>;
+    //fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
+    fn successors(&self, id: &impl NodeId) -> NodeIterator<Self>;
+    fn predecessors(&self, id: &impl NodeId) -> NodeIterator<Self>;
+    fn disjunctions(&self, id: &impl NodeId) -> NodeIterator<Self>;
     fn fix_disjunction(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;
@@ -127,9 +139,7 @@ pub trait Graph where Self: Sized {
         let nodes = self.nodes();            
         
         for node in self.topology() {
-            let predecessors = self.predecessors(node);
-
-            starting_times[node.id()] = predecessors.iter()                
+            starting_times[node.id()] = self.predecessors(node)
                 .map(|x| starting_times[x.id()] + nodes[x.id()].weight())
                 .max().unwrap_or(0);
         }
@@ -152,8 +162,7 @@ pub trait Graph where Self: Sized {
             }*/
 
             let nodes = self.nodes();   
-            let max_predecessor = self
-                .predecessors(node).iter()
+            let max_predecessor = self.predecessors(node)
                 .map(|x| (x.id(), starting_times[x.id()] + nodes[x.id()].weight()))                
                 .max_by_key(|x| x.1);
 
@@ -190,7 +199,7 @@ pub trait Graph where Self: Sized {
             // sink would have the highest value,
             // source would have the lowest value,
             // therefore, all successors should have larger value than current node.
-            let is_cyclic = self.successors(node).iter()
+            let is_cyclic = self.successors(node)
                 .any(|x| processed[x.id()] > counter);
                         
             if is_cyclic {
@@ -210,7 +219,11 @@ pub trait Graph where Self: Sized {
         }
 
         for node in topology.iter().rev() {
-            let tail = self.successors(node).into_iter().map(|x| x.lct() - x.weight()).min().unwrap_or(max_makespan);
+            let tail = self.successors(node)
+                .map(|x| x.lct() - x.weight())
+                .min()
+                .unwrap_or(max_makespan);
+                
             let n = &self.nodes()[*node];
             if tail - n.weight() >= n.est() {
                 self.node_mut(*node).set_lct(tail);

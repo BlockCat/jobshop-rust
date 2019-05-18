@@ -44,10 +44,9 @@ impl Schedule {
         let mut backtracker = vec!(0usize; nodes);
 
         for node in graph.topology() {
-            let predecessors = graph.predecessors(node);
 
             let nodes = graph.nodes();
-            let max_predecessor = predecessors.iter()                
+            let max_predecessor = graph.predecessors(node)                
                 .map(|x| (x.id(), starting_times[x.id()] + nodes[x.id()].weight()))
                 .max_by_key(|x| x.1);
 
@@ -55,8 +54,7 @@ impl Schedule {
                 backtracker[node.id()] = max_predecessor.0;
                 starting_times[node.id()] = max_predecessor.1;
             }
-        }
-        
+        }        
         
         let jobs = problem.jobs.clone();
         let activities = problem.activities.into_iter().enumerate()

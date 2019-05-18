@@ -1,6 +1,6 @@
 use hashbrown::HashSet;
 
-use crate::{ NodeId, GraphNode, ConstrainedNode, Graph, Relation, GraphError, self as disjunctgraph };
+use crate::{ NodeId, GraphNode, ConstrainedNode, NodeIterator, Graph, Relation, GraphError, self as disjunctgraph };
 
 #[derive(Clone, Debug)]
 pub struct LinkedGraph<T: NodeId + Clone> {
@@ -117,16 +117,21 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 		&self.nodes().last().unwrap()
 	}
 
-    fn successors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
+    /*fn successors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
         self.successors[id.id()].iter().map(|x| &self.nodes[*x]).collect()
+	}*/
+    
+    fn successors(&self, id: &impl NodeId) -> NodeIterator<Self> {
+        NodeIterator(Box::new(self.successors[id.id()].iter().map(move |x| &self.nodes[*x])))
+    }
+
+
+    fn predecessors<'a>(&'a self, id: &impl NodeId) -> NodeIterator<Self> {
+		NodeIterator(Box::new(self.predecessors[id.id()].iter().map(move |x| &self.nodes[*x])))
 	}
 
-    fn predecessors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
-		self.predecessors[id.id()].iter().map(|x| &self.nodes[*x]).collect()
-	}
-
-    fn disjunctions<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
-		self.disjunctions[id.id()].iter().map(|x| &self.nodes[*x]).collect()
+    fn disjunctions<'a>(&'a self, id: &impl NodeId) -> NodeIterator<Self> {        
+		NodeIterator(Box::new(self.disjunctions[id.id()].iter().map(move |x| &self.nodes[*x])))
 	}
 
     fn fix_disjunction(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
@@ -201,7 +206,7 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 
 impl <T: NodeId + Clone> LinkedGraph<T> {
     pub fn has_disjunctions(&self) -> bool {
-        self.nodes.iter().any(|node| !self.disjunctions[node.id()].is_empty())
+        self.nodes.iter().any(|node| self.node_has_disjunction(node))        
     }
 
     /// Graph contains relation: node_1 -> node_2
