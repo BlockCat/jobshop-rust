@@ -29,10 +29,30 @@ pub trait GraphNode: NodeId {
 
 pub trait ConstrainedNode: GraphNode {
     fn set_est(&mut self, est: u32);
-    fn set_lct(&mut self, lct: u32);
+    fn set_lst(&mut self, lst: u32);
+    
+    fn set_lct(&mut self, lct: u32) {
+        debug_assert!(lct >= self.weight());
+        self.set_lst(lct - self.weight());
+    }
 
     fn est(&self) -> u32;
-    fn lct(&self) -> u32;
+    fn lst(&self) -> u32;
+    fn lct(&self) -> u32 {
+        self.lst() + self.weight()
+    }
+
+    fn feasible_lct(&self, lct: u32) -> bool {
+        lct >= self.weight() && self.feasible_lst(lct - self.weight())
+    }
+
+    fn feasible_lst(&self, lst: u32) -> bool {
+        lst > self.est()
+    }
+
+    fn feasible_est(&self, est: u32) -> bool {
+        est <= self.lst()
+    }
 }
 
 

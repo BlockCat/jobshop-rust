@@ -33,21 +33,16 @@ impl disjunctgraph::ConstrainedNode for Node {
         });
         self.est = Some(est);
     }
+
+    fn set_lst(&mut self, lst: u32) {
+        self.lst = Some(lst);
+    }
     
     fn est(&self) -> u32 {
         self.est.expect("Could not get earliest starting time!")
     }
 
-    fn set_lct(&mut self, lct: u32) {
-        debug_assert!(lct >= self.weight);
-        debug_assert!(match self.est {
-            Some(est) => lct - self.weight >= est,
-            None => true
-        }, "wrong lst: {} for {:?}", lct - self.weight, self);
-        self.lst = Some(lct - self.weight);
-    }
-    
-    fn lct(&self) -> u32 {
-        self.lst.expect("Could not get latest completion time") + self.weight
-    }
+    fn lst(&self) -> u32 {
+        self.lst.expect("Could not get latest starting time for node")
+    }    
 }

@@ -38,23 +38,14 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                 upper_bound = length;
                 current_best = node;
             }
-        } else {    
-            let (t1, t2) = {
-                let (t1, t2) = next_pair(&resources, &node, upper_bound);
-                (t1.id(), t2.id()) 
-            };
-
-            let mut g1 = node.clone().fix_disjunction(&t1, &t2).expect("Could not fix disjunction: (t1, t2)");
-            if g1.propagate(&t1).is_ok() {
-                if lower_bound(&g1, max_makespan, &resources) < upper_bound {
-                    stack.push_front(g1);
-                }
-            }
-
-            let mut g2 = node.fix_disjunction(&t2, &t1).expect("Could not fix disjunction: (t2, t1)");
-            if g2.propagate(&t2).is_ok() {
-                if lower_bound(&g2, max_makespan, &resources) < upper_bound {
-                    stack.push_front(g2);
+        } else {
+            for (t1, t2) in next_pair(&resources, &node, upper_bound) {
+                let mut graph = node.clone().fix_disjunction(t1, t2).expect("Could not fix disjunction");
+                if graph.propagate(t1, t2).is_ok() {                    
+                    if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
+                        stack.push_front(graph);
+                    }
+                } else {
                 }
             }
         }
@@ -87,7 +78,23 @@ impl<'a> TaskInterval<'a> {
 
     fn from_interval<'b>(graph: &CGraph, resource: &[&'b node::Node], lower: &node::Node, upper: &node::Node) -> Option<TaskInterval<'b>> {
 
-        let nodes: Vec<&node::Node> = resource.iter().filter(|node| node.est() >= lower.est() && node.lct() <= upper.lct()).cloned().collect();
+        // Task intervals should contain operations that have no disjunctions left        
+        let nodes: Vec<&node::Node> = resource.iter()
+            .filter(|node| node.est() >= lower.est() && node.lct() <= upper.lct())
+            .cloned().collect();
+        
+        // if the lower node is already scheduled in front of all other nodes
+        // If none of the nodes have a disjunction with the lower
+        // doing this will make sure the a completely scheduled resource will not have a task interval,
+        // and that's how it should be right?
+        if nodes.iter().all(|n| !graph.has_disjunction(*n, lower)) {
+            return None;
+        }
+
+        // If none of the nodes have a disjunction with the upper
+        if nodes.iter().all(|n| !graph.has_disjunction(upper, *n)) {    
+            return None;
+        }
         
         // TaskIntervals have by definition 2 or more nodes.
         if nodes.len() < 2 {
@@ -136,14 +143,14 @@ impl<'a> TaskInterval<'a> {
         };
 
         debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
-        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
+        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");        
         debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
 
         Some(ti)
     }
 }
 
-fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (&'a node::Node, &'a node::Node) {
+fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> Vec<(&'a node::Node, &'a node::Node)> {
 
     // Calculate the critical task interval for each resource/machine
     // Returns true if machine still has operations that need to be ordered
@@ -168,6 +175,26 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
         .filter(|(_, rr)| *rr > 0)
         .min_by_key(|(_, rr)| *rr)
         .expect("Can't find critical");
+
+    if crit.nc_start.len() == 1 {
+        let first_node = crit.nc_start[0];
+        let other_node = crit.nodes.iter()
+            .find(|o| graph.has_disjunction(first_node, **o))
+            .expect("No disjunct node found for nc_start, how is this possible?");
+
+        return vec!((first_node, other_node));
+    }
+
+    if crit.nc_end.len() == 1 {
+        let last_node = crit.nc_end[0];
+        println!("graph: {:?}\n", graph);
+        println!("critical: {:?}", last_node);
+        let other_node = crit.nodes.iter()
+            .find(|o| graph.has_disjunction(last_node, **o))
+            .expect("No disjunct node found for nc_end, how is this possible?");
+
+        return vec!((other_node, last_node));
+    }
     
     let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
     let t2 = crit.nodes.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
@@ -200,9 +227,9 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
         let t: &node::Node = s1.iter().min_by_key(|t| h(t1, t, max_makespan, crit, delta)).expect("Could not minimize h1");
 
         if g(t1, t, max_makespan) <= g(t, t1, max_makespan) {
-            (t1, t)
+            vec!((t1, t), (t, t1))
         } else {
-            (t, t1)
+            vec!((t, t1), (t1, t))
         }
     } else {
         let delta = t2.lct() - crit.nodes.iter()
@@ -211,9 +238,9 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
         let t: &node::Node = s2.iter().min_by_key(|t| h(t, t2, max_makespan, crit, delta)).expect("Could not minimize h2");
 
         if g(t, t2, max_makespan) <= g(t2, t, max_makespan) {
-            (t, t2)
+            vec!((t, t2), (t2, t))
         } else {
-            (t2, t)
+            vec!((t2, t), (t, t2))
         }
     }
 }
@@ -222,24 +249,26 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> (
 /// Find the critical on a resource, if there is no found then there inconsistency
 fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
     
+    // Get the nodes on the resources    
     let resource = graph.nodes().iter()
-        .filter(|n| n.machine_id() == Some(resource_id as u32))
-        .filter(|n| graph.node_has_disjunction(*n))
+        .filter(|n| n.machine_id() == Some(resource_id as u32))        
         .collect_vec();
-    
+
+    // TaskIntervals can have a node in front or after all the nodes in the taskinterval, but these scheduled nodes should
+    // not be part of the definition of the interval
     let ests = resource.iter().sorted_by_key(|n| n.est()).collect::<Vec<_>>();
     let lcts = resource.iter().sorted_by_key(|n| n.lct()).collect::<Vec<_>>();
-
+    
     let mut j = 0;
 
     let mut task_intervals: Vec<TaskInterval<'a>> = Vec::with_capacity(resource.len().pow(2));
 
-    for i in 0..resource.len() {
+    for i in 0..ests.len() {
         let lower = ests[i];
         while lcts[j].lct() < lower.est() {
             j += 1;
         }
-        for j in j..resource.len() {
+        for j in j..lcts.len() {
             let upper = lcts[j];
             if lower.est() < upper.lct() {
                 if let Some(ti) = TaskInterval::from_interval(graph, &resource, lower, upper) {
