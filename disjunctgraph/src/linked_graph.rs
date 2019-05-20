@@ -79,24 +79,29 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
             }
         }
 
-        Ok(())
+        // Find all disjunctions in ineficient way for now
+        for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
+            for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
+                if node > other {
+                    let other_lst = self.nodes[other].lst();
+                    let node_ect = self.nodes[node].est() + self.nodes[node].weight();
+                    // Check if node -> other is not possible 
+                    if node_ect > other_lst {
+                        // other -> node it is then
+                        let node_1 = other;
+                        let node_2 = node.id();
+                        self.disjunctions[node_1].remove(&node_2);
+                        self.disjunctions[node_2].remove(&node_1);
+                        
+                        // Node_1 -> Node_2
+                        self.successors[node_1].insert(node_2);
+                        self.predecessors[node_2].insert(node_1);     
+                    }
+                }
+            }            
+        }
 
-        /*for other in self.disjunctions(node).iter().map(|x| x.id()).collect::<Vec<_>>() {
-            let other_lst = self.nodes[other].lct() - self.nodes[other].weight();
-            let node_ect = node_est + node_weight;
-            // Check if node -> other is not possible 
-            if node_ect > other_lst {
-                // other -> node it is then
-                let node_1 = other;
-                let node_2 = node.id();
-                self.disjunctions[node_1].remove(&node_2);
-                self.disjunctions[node_2].remove(&node_1);
-                
-                // Node_1 -> Node_2
-                self.successors[node_1].insert(node_2);
-                self.predecessors[node_2].insert(node_1);     
-            }
-        }*/
+        Ok(())
     }
 }
 

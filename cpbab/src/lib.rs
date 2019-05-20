@@ -34,7 +34,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
         if !node.has_disjunctions() {
             // We are a complete schedule!
             let length = node.critical_length().expect("Could not calculate critical length");
-            if length < upper_bound {
+            if length <= upper_bound {
                 upper_bound = length;
                 current_best = node;
             }
@@ -172,7 +172,8 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
         .map(|(cr, rr)| {
             (cr, cr.slack() as u32 * rr * std::cmp::min(PAR, num_choices(cr) as u32))
         })
-        .filter(|(_, rr)| *rr > 0)
+        //.inspect(|p| println!("cr: {:?}", p.1))
+        //.filter(|(_, rr)| *rr >= 0)
         .min_by_key(|(_, rr)| *rr)
         .expect("Can't find critical");
 
