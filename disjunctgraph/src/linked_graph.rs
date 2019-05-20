@@ -45,7 +45,7 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
         while let Some(prop) = stack.pop_front() {
             match prop {
                 Propagation::LST { id, max_lst } => {
-                    let node = &self.nodes()[id];
+                    let node = &self[id];
                     if max_lst < node.lst() {
                         if node.feasible_lst(max_lst) {
                             stack.extend(self.successors(&id).map(|s| {
@@ -54,14 +54,14 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
                                     max_lst: max_lst + node.weight()
                                 }
                             }));
-                            self.node_mut(id).set_lct(max_lst);
+                            self[id].set_lct(max_lst);
                         } else {
                             return Err(());
                         }
                     }
                 },
                 Propagation::EST { id, min_est } => {
-                    let node = &self.nodes()[id];
+                    let node = &self[id];
                     if min_est > node.est() {
                         if node.feasible_est(min_est) {
                             stack.extend(self.predecessors(&id).map(|s| {
@@ -70,7 +70,7 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
                                     min_est: min_est - s.weight()
                                 }    
                             }));
-                            self.node_mut(id).set_est(min_est);
+                            self[id].set_est(min_est);
                         } else {
                             return Err(());
                         }
@@ -145,14 +145,6 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
     fn nodes(&self) -> &[T] {
 		&self.nodes
 	}
-
-    fn nodes_mut(&mut self) -> &mut [T] {
-        &mut self.nodes
-    }
-
-    fn node_mut(&mut self, id: usize) -> &mut T {
-        &mut self.nodes[id]
-    }
 
 	fn source(&self) -> &T {
 		&self.nodes().first().unwrap()
@@ -248,6 +240,22 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         }
 	}
 }
+
+impl<T: NodeId + Clone> std::ops::Index<usize> for LinkedGraph<T> {
+    type Output = T;
+
+   fn index(&self, node: usize) -> &Self::Output {
+       &self.nodes[node]
+   }
+}
+
+impl<T: NodeId + Clone> std::ops::IndexMut<usize> for LinkedGraph<T> {
+
+   fn index_mut(&mut self, node: usize) -> &mut T {
+       &mut self.nodes[node]
+   }
+}
+
 
 impl <T: NodeId + Clone> LinkedGraph<T> {
     pub fn has_disjunctions(&self) -> bool {

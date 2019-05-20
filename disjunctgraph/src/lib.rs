@@ -105,7 +105,7 @@ impl<'a, G: Graph> Iterator for TopologyIterator<'a, G> {
                     if (self.node_state[current_node] & TOPOLOGY_PROCESSED) == 0 {
                         // Set node to be not in stack but yes processed
                         self.node_state[current_node] = TOPOLOGY_PROCESSED;                        
-                        return Some(&self.graph.nodes()[current_node]);                        
+                        return Some(&self.graph[current_node]);                        
                     }
                 }
             }
@@ -123,12 +123,10 @@ impl<'a, G:Graph> Iterator for NodeIterator<'a, G> {
     }
 }
 
-
-pub trait Graph where Self: Sized {
+pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as Graph>::Node> {
     type Node: NodeId + GraphNode;
     fn create(nodes: Vec<Self::Node>, edges: Vec<Vec<Relation>>) -> Self;
-    fn nodes(&self) -> &[Self::Node];
-    fn nodes_mut(&mut self) -> &mut [Self::Node];
+    fn nodes(&self) -> &[Self::Node];    
     fn source(&self) -> &Self::Node;
     fn sink(&self) -> &Self::Node;
     //fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
@@ -137,8 +135,7 @@ pub trait Graph where Self: Sized {
     fn disjunctions(&self, id: &impl NodeId) -> NodeIterator<Self>;
     fn fix_disjunction(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
-    fn into_directed(&self) -> Result<Self, GraphError>;
-    fn node_mut(&mut self, id: usize) -> &mut Self::Node;
+    fn into_directed(&self) -> Result<Self, GraphError>;    
 
     /// Retrieves topology ordering in the graph, starting at the source, ending at the sink.
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
@@ -197,7 +194,7 @@ pub trait Graph where Self: Sized {
         let mut pointer = backtracker[self.sink().id()];
         while pointer != 0 {
             let prev = backtracker[pointer];
-            let node = &self.nodes()[pointer];
+            let node = &self[pointer];
             path.push(node);
             pointer = prev;
         }
@@ -235,7 +232,7 @@ pub trait Graph where Self: Sized {
 
         for node in &topology {
             let head = self.predecessors(node).into_iter().map(|x| x.est() + x.weight()).max().unwrap_or(0);
-            self.node_mut(*node).set_est(head);
+            self[*node].set_est(head);
         }
 
         for node in topology.iter().rev() {
@@ -244,9 +241,9 @@ pub trait Graph where Self: Sized {
                 .min()
                 .unwrap_or(max_makespan);
                 
-            let n = &self.nodes()[*node];
+            let n = &self[*node];
             if tail - n.weight() >= n.est() {
-                self.node_mut(*node).set_lct(tail);
+                self[*node].set_lct(tail);
             } else {
                 return Err(());
             }

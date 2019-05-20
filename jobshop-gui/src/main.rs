@@ -90,8 +90,8 @@ impl Widget for Win {
             Msg::Fix(a, b) => {
                 println!("{:?}->{:?}", a, b);
                 let constraints = ProblemConstraints::new(&self.model.graph, UPPER).unwrap();
-                let node_1 = &self.model.graph.nodes()[a];
-                let node_2 = &self.model.graph.nodes()[b];
+                let node_1 = &self.model.graph[a];
+                let node_2 = &self.model.graph[b];
                 println!("Other score: {}", constraints.score());
                 if constraints.check_precedence(node_1, node_2) {
 
