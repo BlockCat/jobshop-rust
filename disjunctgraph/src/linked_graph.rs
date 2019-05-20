@@ -16,89 +16,94 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
     /// Propagates for the fixation that is node_1 -> node_2
     pub fn propagate(&mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), ()> {
         use std::collections::VecDeque;
-        let max_makespan = self.nodes().iter().map(|n| n.lct()).max().unwrap();
+        
+        let mut change_occured = true;
 
+        
         enum Propagation {
             LST { id: usize, max_lst: u32},
             EST { id: usize, min_est: u32}
-        }
-
+        }        
         let mut stack: VecDeque<Propagation> = VecDeque::with_capacity(self.nodes.len());
         
-        // Add the successors
-        let n2_est = self.nodes[node_2.id()].est() + self.nodes[node_2.id()].weight();
-        for successor in self.successors(node_2) {
-            stack.push_back(Propagation::EST {
-                id: successor.id(),
-                min_est: n2_est
-            });
-        }
+        while change_occured {
+            stack.clear();
+            change_occured = false;
+            // Add the successors
+            let n2_est = self.nodes[node_2.id()].est() + self.nodes[node_2.id()].weight();
+            for successor in self.successors(node_2) {
+                stack.push_back(Propagation::EST {
+                    id: successor.id(),
+                    min_est: n2_est
+                });
+            }
 
-        let n1_lst = self.nodes[node_1.id()].lst();
-        for predecessor in self.predecessors(node_1) {
-            stack.push_back(Propagation::LST {
-                id: predecessor.id(),
-                max_lst: n1_lst
-            });
-        }
+            let n1_lst = self.nodes[node_1.id()].lst();
+            for predecessor in self.predecessors(node_1) {
+                stack.push_back(Propagation::LST {
+                    id: predecessor.id(),
+                    max_lst: n1_lst
+                });
+            }
 
-        while let Some(prop) = stack.pop_front() {
-            match prop {
-                Propagation::LST { id, max_lst } => {
-                    let node = &self[id];
-                    if max_lst < node.lst() {
-                        if node.feasible_lst(max_lst) {
-                            stack.extend(self.successors(&id).map(|s| {
-                                Propagation::LST {
-                                    id: id,
-                                    max_lst: max_lst + node.weight()
-                                }
-                            }));
-                            self[id].set_lct(max_lst);
-                        } else {
-                            return Err(());
+            while let Some(prop) = stack.pop_front() {
+                match prop {
+                    Propagation::LST { id, max_lst } => {
+                        let node = &self[id];
+                        if max_lst < node.lst() {
+                            if node.feasible_lst(max_lst) {
+                                stack.extend(self.successors(&id).map(|s| {
+                                    Propagation::LST {
+                                        id: id,
+                                        max_lst: max_lst + node.weight()
+                                    }
+                                }));
+                                self[id].set_lct(max_lst);
+                            } else {
+                                return Err(());
+                            }
                         }
-                    }
-                },
-                Propagation::EST { id, min_est } => {
-                    let node = &self[id];
-                    if min_est > node.est() {
-                        if node.feasible_est(min_est) {
-                            stack.extend(self.predecessors(&id).map(|s| {
-                                Propagation::EST {
-                                    id: id,
-                                    min_est: min_est - s.weight()
-                                }    
-                            }));
-                            self[id].set_est(min_est);
-                        } else {
-                            return Err(());
+                    },
+                    Propagation::EST { id, min_est } => {
+                        let node = &self[id];
+                        if min_est > node.est() {
+                            if node.feasible_est(min_est) {
+                                stack.extend(self.predecessors(&id).map(|s| {
+                                    Propagation::EST {
+                                        id: id,
+                                        min_est: min_est - s.weight()
+                                    }    
+                                }));
+                                self[id].set_est(min_est);
+                            } else {
+                                return Err(());
+                            }
                         }
                     }
                 }
             }
-        }
-
-        // Find all disjunctions in ineficient way for now
-        for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
-            for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
-                if node > other {
-                    let other_lst = self.nodes[other].lst();
-                    let node_ect = self.nodes[node].est() + self.nodes[node].weight();
-                    // Check if node -> other is not possible 
-                    if node_ect > other_lst {
-                        // other -> node it is then
-                        let node_1 = other;
-                        let node_2 = node.id();
-                        self.disjunctions[node_1].remove(&node_2);
-                        self.disjunctions[node_2].remove(&node_1);
-                        
-                        // Node_1 -> Node_2
-                        self.successors[node_1].insert(node_2);
-                        self.predecessors[node_2].insert(node_1);     
+            // Find all disjunctions in ineficient way for now
+            for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
+                for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
+                    if node > other {
+                        let other_lst = self.nodes[other].lst();
+                        let node_ect = self.nodes[node].est() + self.nodes[node].weight();
+                        // Check if node -> other is not possible 
+                        if node_ect > other_lst {
+                            change_occured = true;
+                            // other -> node it is then
+                            let node_1 = other;
+                            let node_2 = node.id();
+                            self.disjunctions[node_1].remove(&node_2);
+                            self.disjunctions[node_2].remove(&node_1);
+                            
+                            // Node_1 -> Node_2
+                            self.successors[node_1].insert(node_2);
+                            self.predecessors[node_2].insert(node_1);     
+                        }
                     }
                 }
-            }            
+            }
         }
 
         Ok(())

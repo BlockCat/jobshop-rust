@@ -113,9 +113,10 @@ impl<'a> TaskInterval<'a> {
             .filter(|node| upper.lct() >= node.est() + processing)            
             .collect::<Vec<_>>();
 
-        // Keep nodes that have no predecessor on the same resource        
+        // Keep nodes that have no predecessor on the same resource
+        // if it has any "other -> node" then it's a nope
         let nc_start = nc_start.iter()
-            .filter(|node| nc_start.iter().all(|other| !graph.has_precedence(**other, ***node)))
+            .filter(|node| !nc_start.iter().any(|other| graph.has_precedence(**other, ***node)))
             .map(|x| **x)
             .collect::<Vec<_>>();
 
@@ -130,8 +131,9 @@ impl<'a> TaskInterval<'a> {
             .collect::<Vec<_>>();
 
         // Keep nodes that have no successor on the same resource 
+        // if it has any "node -> other" then it's a nope
         let nc_end = nc_end.iter()
-            .filter(|node| nc_end.iter().all(|other| !graph.has_precedence(***node, **other)))
+            .filter(|node| !nc_end.iter().any(|other| graph.has_precedence(***node, **other)))
             .map(|x| **x)
             .collect::<Vec<_>>();
 
@@ -143,7 +145,8 @@ impl<'a> TaskInterval<'a> {
         };
 
         debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
-        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");        
+        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
+        debug_assert!(ti.nc_start.iter().all(|n| graph.node_has_disjunction(*n)) || ti.nc_end.iter().all(|n| graph.node_has_disjunction(*n)));        
         debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
 
         Some(ti)
@@ -189,12 +192,11 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
     if crit.nc_end.len() == 1 {
         let last_node = crit.nc_end[0];
         println!("graph: {:?}\n", graph);
-        println!("critical: {:?}", last_node);
-        let other_node = crit.nodes.iter()
-            .find(|o| graph.has_disjunction(last_node, **o))
-            .expect("No disjunct node found for nc_end, how is this possible?");
-
-        return vec!((other_node, last_node));
+        println!("critical: {:?}\n", last_node);
+        println!("nodes: {:?}", crit.nc_start.len());
+        if let Some(other_node) = crit.nodes.iter().find(|o| graph.has_disjunction(last_node, **o)) {
+            return vec!((other_node, last_node));
+        }
     }
     
     let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
@@ -220,7 +222,11 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
     println!("\nStart: \n{:?}", crit.nc_start);
     println!("\ns1: \n{:?}", s1);
 
-    if s1.len() <= s2.len() {
+    debug_assert!(s1.len() > 0 || s2.len() > 0, "No pair is possible");
+
+    let shouldbes1 = s2.len() == 0;
+
+    if s1.len() <= s2.len() || shouldbes1 {
         let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();

@@ -41,7 +41,7 @@ mod tests {
         assert_eq!(13, l.critical_length().unwrap());
     }
     
-    /*#[test]
+    #[test]
     fn test_cpbab_3() {
         use disjunctgraph::Graph;
         let problem = big_problem();
@@ -51,7 +51,7 @@ mod tests {
         println!("Completed: {}", !l.has_disjunctions());
         schedule.pretty_print();
         assert_eq!(13, l.critical_length().unwrap());
-    }*/
+    }
 
     /*#[bench]
     fn bench_local_search_small(b: &mut Bencher) {
