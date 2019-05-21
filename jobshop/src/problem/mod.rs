@@ -3,7 +3,7 @@ use std::fs::File;
 use std::path::Path;
 
 use disjunctgraph::{ Graph, GraphNode, Relation };
-
+use itertools::Itertools;
 
 pub trait ProblemSolver {
     type Solution;
@@ -84,24 +84,30 @@ impl Problem {
 
         Problem::from_reader(reader)        
     }
+
     pub fn into_graph<I: Graph>(&self) -> I {
         let problem = self;
 	    // Create nodes
-		let mut nodes: Vec<I::Node> = Vec::new();
-		let mut counter = 0;
-		nodes.push(I::Node::create(0, 0, None, None));
+		let nodes: Vec<I::Node> = {
+		    let mut counter = 0;
+            let mut nodes = Vec::new();
 
-		for (job_id, activities) in problem.jobs.iter().enumerate() {
-			nodes.extend(activities.iter()
-				.map(|x| {
-					counter += 1;
-					let id = counter;
-					let weight = problem.activities[*x].process_time;
-					let machine_id = problem.activities[*x].machine_id;
-					I::Node::create(id, weight, Some(machine_id), Some(job_id))
-				}));
-		}
-		nodes.push(I::Node::create(nodes.len(), 0, None, None));		
+            // Create all nodes
+            nodes.push(I::Node::create(0, 0, None, None));
+
+            for (job_id, activities) in problem.jobs.iter().enumerate() {
+                nodes.extend(activities.iter()
+                    .map(|x| {
+                        counter += 1;
+                        let id = counter;
+                        let weight = problem.activities[*x].process_time;
+                        let machine_id = problem.activities[*x].machine_id;
+                        I::Node::create(id, weight, Some(machine_id), Some(job_id))
+                    }));
+            }
+            nodes.push(I::Node::create(nodes.len(), 0, None, None));
+            nodes
+        };
 
 		let mut edges: Vec<Vec<Relation>> = nodes.iter().map(|_| Vec::new()).collect();		
 		
@@ -128,14 +134,15 @@ impl Problem {
 			edges[n].push(Relation::Predecessor(last));
 			edges[last].push(Relation::Successor(n));
 		}
-
-		// Add source edges
 		
 		// Add disjunctions between activities:
 		// - on the same machine
 		// - not on the same job
+        
+        // Maybe create: a list of all on the same resource
 		type Activity = (usize, usize); // (Job, node_index)		
-		let mut mapping: Vec<Vec<Activity>> = vec!(vec!(); problem.machines as usize);
+        type Resource = Vec<Activity>;
+		let mut mapping: Vec<Resource> = vec!(vec!(); problem.machines as usize);
 		for (job, activities) in problem.jobs.iter().enumerate() {
 			for activity in activities {
 				let machine = problem.activities[*activity].machine_id as usize;				
@@ -144,17 +151,22 @@ impl Problem {
 		}
 
 		for activities in mapping {
-			for i in 0..(activities.len() - 1) {
-				for j in (i+1)..activities.len() {
-					let ac_1 = activities[i];
-					let ac_2 = activities[j];
+            for c in activities.iter().combinations(2) {
+                let ac_1 = c[0];
+                let ac_2 = c[1];
 
-					if ac_1.0 != ac_2.0 {
-						edges[ac_1.1].push(Relation::Disjunctive(ac_2.1));
-						edges[ac_2.1].push(Relation::Disjunctive(ac_1.1));
-					}
-				}
-			}
+                if ac_1.0 != ac_2.0 {
+                    edges[ac_1.1].push(Relation::Disjunctive(ac_2.1));
+                    edges[ac_2.1].push(Relation::Disjunctive(ac_1.1));
+                } else {
+                    // They are on the same Job, so add a directed from lower node to higher node
+                    let early = std::cmp::min(ac_1.1, ac_2.1);
+                    let late = std::cmp::max(ac_1.1, ac_2.1);
+
+                    edges[early].push(Relation::Successor(late));
+                    edges[late].push(Relation::Predecessor(early));
+                }
+            }
 		}
 		
 		I::create(nodes, edges)

@@ -20,8 +20,6 @@ mod tests {
         let problem = debug_problem();
         let l = CPBAB::new().solve(&problem);
 
-        println!("final graph: {:#?}", l);
-
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
         schedule.pretty_print();

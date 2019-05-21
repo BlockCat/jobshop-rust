@@ -251,4 +251,6 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
 
         Ok(())
     }
+
+    fn search_orders(&mut self) -> bool where Self::Node: ConstrainedNode; 
 }

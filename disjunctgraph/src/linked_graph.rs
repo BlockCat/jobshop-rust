@@ -82,28 +82,7 @@ impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
                     }
                 }
             }
-            // Find all disjunctions in ineficient way for now
-            for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
-                for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
-                    if node > other {
-                        let other_lst = self.nodes[other].lst();
-                        let node_ect = self.nodes[node].est() + self.nodes[node].weight();
-                        // Check if node -> other is not possible 
-                        if node_ect > other_lst {
-                            change_occured = true;
-                            // other -> node it is then
-                            let node_1 = other;
-                            let node_2 = node.id();
-                            self.disjunctions[node_1].remove(&node_2);
-                            self.disjunctions[node_2].remove(&node_1);
-                            
-                            // Node_1 -> Node_2
-                            self.successors[node_1].insert(node_2);
-                            self.predecessors[node_2].insert(node_1);     
-                        }
-                    }
-                }
-            }
+            change_occured = self.search_orders();
         }
 
         Ok(())
@@ -244,6 +223,43 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
             Ok(cloned)
         }
 	}
+
+    fn search_orders(&mut self) -> bool where Self::Node: ConstrainedNode {
+        
+        let mut change_occured = false;
+        for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
+            for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
+                
+                    let node_ect = self[node].est() + self[node].weight();
+                    let node_est = self[node].est();
+
+                    let other_lst = self[other].lst();
+
+                    // Check if node -> other is not possible 
+                    // node: 1 -> other: 3
+                    // node_ect: 2
+                    // other_lst: 6
+
+
+                    if node_ect > other_lst || other_lst < node_est {
+                        change_occured = true;
+                        // other -> node it is then
+                        let node_1 = other;
+                        let node_2 = node.id();
+                        
+                        self.disjunctions[node_1].remove(&node_2);
+                        self.disjunctions[node_2].remove(&node_1);
+                        
+                        // Node_1 -> Node_2
+                        self.successors[node_1].insert(node_2);
+                        self.predecessors[node_2].insert(node_1);     
+                    }
+                
+            }
+        }
+
+        change_occured
+    }
 }
 
 impl<T: NodeId + Clone> std::ops::Index<usize> for LinkedGraph<T> {
@@ -278,5 +294,26 @@ impl <T: NodeId + Clone> LinkedGraph<T> {
 
     pub fn node_has_disjunction(&self, node: &impl NodeId) -> bool {
         !self.disjunctions[node.id()].is_empty()
+    }
+}
+
+impl<T: ConstrainedNode + Clone> std::fmt::Display for LinkedGraph<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "successors:\n").unwrap();
+        for node in self.nodes() {
+            write!(f, "{} -> {:?}\n", node.id(), self.successors(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+        }
+
+        write!(f, "predecessor:\n").unwrap();
+        for node in self.nodes() {
+            write!(f, "{} -> {:?}\n", node.id(), self.predecessors(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+        }
+
+        write!(f, "disjunction:\n").unwrap();
+        for node in self.nodes() {
+            write!(f, "{} -> {:?}\n", node.id(), self.disjunctions(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+        }
+
+        write!(f, "")
     }
 }

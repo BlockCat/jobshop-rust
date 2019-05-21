@@ -17,7 +17,8 @@ const PAR: u32 = 3;
 // Operations that have no disjunctions left are looked at too.
 // I believe cycles can occur? ()
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
-    root.init_weights(max_makespan).expect("Problem with makespan is not feasible");
+    root.init_weights(max_makespan).expect("Problem with makespan is not feasible");    
+    root.search_orders();
     
     let mut upper_bound = max_makespan;
     let mut current_best = root.clone();
@@ -83,6 +84,12 @@ impl<'a> TaskInterval<'a> {
             .filter(|node| node.est() >= lower.est() && node.lct() <= upper.lct())
             .cloned().collect();
         
+
+        // TaskIntervals have by definition 2 or more nodes.
+        if nodes.len() < 2 {
+            return None;
+        }
+
         // if the lower node is already scheduled in front of all other nodes
         // If none of the nodes have a disjunction with the lower
         // doing this will make sure the a completely scheduled resource will not have a task interval,
@@ -96,10 +103,6 @@ impl<'a> TaskInterval<'a> {
             return None;
         }
         
-        // TaskIntervals have by definition 2 or more nodes.
-        if nodes.len() < 2 {
-            return None;
-        }
 
         let processing = nodes.iter().map(|x| x.weight()).sum();
 
@@ -110,16 +113,25 @@ impl<'a> TaskInterval<'a> {
         // If t was the first in the interval, is there enough space to execute the other nodes?
 
         let nc_start = nodes.iter()
-            .filter(|node| upper.lct() >= node.est() + processing)            
-            .collect::<Vec<_>>();
+            .filter(|node| upper.lct() >= node.est() + processing);
+            
 
         // Keep nodes that have no predecessor on the same resource
         // if it has any "other -> node" then it's a nope
-        let nc_start = nc_start.iter()
-            .filter(|node| !nc_start.iter().any(|other| graph.has_precedence(**other, ***node)))
-            .map(|x| **x)
+        let nc_start = nc_start
+            .filter(|node| !nodes.iter()
+                .filter(|o| node.id() != o.id())
+                .any(|other| graph.has_precedence(*other, **node)))
+            .map(|x| *x)
             .collect::<Vec<_>>();
 
+
+        // All nodes within nc_start should be in disjunction to each other.
+        // If a pair of nodes (a, b) was not in disjunction with each other, 
+        // then (a -> b) and b could not be first, or (b -> a) and a could not be first.
+        // Likewise for nc_end.
+        
+        
         // Calculate nc_end
         // NC end is the set of jobs that can be executed after all jobs in S.
         // we have job t: up(t) - p(S) >= low(S) => t can be last
@@ -127,15 +139,23 @@ impl<'a> TaskInterval<'a> {
         // If t was the last interval, is there enough space to execute the other nodes?
         
         let nc_end = nodes.iter()
-            .filter(|node| node.lct() >= lower.est() + processing)            
-            .collect::<Vec<_>>();
+            .filter(|node| node.lct() >= lower.est() + processing);
+            
 
         // Keep nodes that have no successor on the same resource 
         // if it has any "node -> other" then it's a nope
-        let nc_end = nc_end.iter()
-            .filter(|node| !nc_end.iter().any(|other| graph.has_precedence(***node, **other)))
-            .map(|x| **x)
+        let nc_end = nc_end
+            .filter(|node| !nodes.iter().any(|other| graph.has_precedence(**node, *other)))
+            .map(|x| *x)
             .collect::<Vec<_>>();
+
+        //compile_error!("Something is totally wrong when calculating nc_end"); 
+
+        if nc_start.len() == 1 && !graph.node_has_disjunction(nc_start[0]) // Nothing to schedule at the start
+            && nc_end.len() == 1 && !graph.node_has_disjunction(nc_end[0]) // Nothing to schedule at the end
+        {
+            return None;
+        }
 
         let ti = TaskInterval {
             upper: upper.lct(), 
@@ -146,7 +166,21 @@ impl<'a> TaskInterval<'a> {
 
         debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
         debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
-        debug_assert!(ti.nc_start.iter().all(|n| graph.node_has_disjunction(*n)) || ti.nc_end.iter().all(|n| graph.node_has_disjunction(*n)));        
+        debug_assert!(ti.nc_start.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])), 
+            "All nodes within nc_start should have disjunctions between each other, \nnodes: {:?}\n\n graph: {:?}", ti.nc_start, graph, );
+       
+        debug_assert!(ti.nc_end.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])),
+            "All nodes within nc_end should have disjunctions between each other, {}", ti.nc_start.len());
+
+        // Do all nodes that can be placed first need a disjunction?        
+        debug_assert!(
+            ti.nc_start.iter().all(|n| graph.node_has_disjunction(*n)) || 
+            ti.nc_end.iter().all(|n| graph.node_has_disjunction(*n)),
+            "Neither nodes in nc_start nor in nc_end has disjunctions. \n graph: {}\nstart: {:?} \nend: {:?}\nlower: {:?}\nupper: {:?}\n", 
+            graph,
+            ti.nc_start,
+            ti.nc_end,
+            lower, upper);
         debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
 
         Some(ti)
@@ -162,76 +196,82 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
             .filter(|x| x.machine_id() == Some(**id as u32))
             .any(|x| graph.node_has_disjunction(x))
     };
-    let criticals: Vec<TaskInterval> = resources.iter()
+    let criticals: Vec<Option<TaskInterval>> = resources.iter()
         .filter(resource_filter)
         .map(|id| crit(*id, graph))
         .collect();
+    
 
     // Calculate the slack for each resource
     let resource_slacks: Vec<u32> = resources.iter().map(|id| resource_slack(*id as u32, graph)).collect(); 
     
     // Find the resource with the most constrained task interval
-    let (crit, _) = criticals.iter().zip(resource_slacks)
-        .map(|(cr, rr)| {
-            (cr, cr.slack() as u32 * rr * std::cmp::min(PAR, num_choices(cr) as u32))
+    let (crit, _) = criticals.iter().zip(resource_slacks)        
+        .filter_map(|(cr, rr)| {
+            if let Some(cr) = cr {
+                Some((cr, cr.slack() as u32 * rr * std::cmp::min(PAR, num_choices(cr) as u32)))
+            } else {
+                None
+            }
         })
         //.inspect(|p| println!("cr: {:?}", p.1))
         //.filter(|(_, rr)| *rr >= 0)
         .min_by_key(|(_, rr)| *rr)
         .expect("Can't find critical");
 
-    if crit.nc_start.len() == 1 {
-        let first_node = crit.nc_start[0];
-        let other_node = crit.nodes.iter()
-            .find(|o| graph.has_disjunction(first_node, **o))
-            .expect("No disjunct node found for nc_start, how is this possible?");
+    debug_assert!(!crit.nodes.iter().all(|x| !graph.node_has_disjunction(*x)));
 
-        return vec!((first_node, other_node));
+    if crit.nc_start.len() == 1 {
+        let first_node = crit.nc_start[0];        
+        if let Some(other_node) = crit.nodes.iter().find(|o| graph.has_disjunction(first_node, **o)) {
+            return vec!((first_node, other_node));
+        }
     }
 
     if crit.nc_end.len() == 1 {
         let last_node = crit.nc_end[0];
-        println!("graph: {:?}\n", graph);
-        println!("critical: {:?}\n", last_node);
-        println!("nodes: {:?}", crit.nc_start.len());
         if let Some(other_node) = crit.nodes.iter().find(|o| graph.has_disjunction(last_node, **o)) {
             return vec!((other_node, last_node));
         }
     }
     
-    let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
-    let t2 = crit.nodes.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
+    let t1 = crit.nc_start.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
+    let t2 = crit.nc_end.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
     let crit_slack = crit.slack();
-
+    
     let s1 = crit.nodes.iter()
         .filter(|t| t.id() != t1.id())
-        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))
-        .filter(|t| t.est() <= t1.est() + crit_slack as u32)
+        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))        
+        .filter(|t| crit.upper >= t.est() + crit.processing)
         .filter(|t| graph.has_disjunction(*t1, **t)) // The nodes can be ordered, and are on the same resource    
     .collect::<Vec<_>>();
     
     let s2 = crit.nodes.iter()
         .filter(|t| t.id() != t2.id())
-        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))
-        .filter(|t| t.lct() + crit_slack as u32 >= t2.lct())
+        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))        
+        .filter(|t| t.lct() >= crit.lower + crit.processing)
         .filter(|t| graph.has_disjunction(**t, *t2))
     .collect::<Vec<_>>();
 
-    println!("\nCritical:\n {:#?}", crit.nodes);
+    /*println!("\nCritical:\n {:#?}", crit.nodes);
     println!("\nStart: \n{:?}", crit.nc_start);
-    println!("\ns1: \n{:?}", s1);
+    println!("\ns1: \n{:?}", s1);*/
 
-    debug_assert!(s1.len() > 0 || s2.len() > 0, "No pair is possible");
-
+    //debug_assert!(s1.len() > 0 || s2.len() > 0, "No pair is possibles, {}\ns{:?}\ne{:?}", graph, crit.nc_start, crit.nc_end);
+    if s1.len() == 0 && s2.len() == 0 {
+        return vec!();
+    }
     let shouldbes1 = s2.len() == 0;
 
     if s1.len() <= s2.len() || shouldbes1 {
-        let delta = crit.nodes.iter()
+        let delta = crit.nc_start.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
 
-        let t: &node::Node = s1.iter().min_by_key(|t| h(t1, t, max_makespan, crit, delta)).expect("Could not minimize h1");
+        let t: &node::Node = s1.iter()
+            .min_by_key(|t| left_bounded_entropy(t1, t, max_makespan, crit, delta))
+            .expect("Could not minimize h1");
 
         if g(t1, t, max_makespan) <= g(t, t1, max_makespan) {
             vec!((t1, t), (t, t1))
@@ -239,10 +279,12 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
             vec!((t, t1), (t1, t))
         }
     } else {
-        let delta = t2.lct() - crit.nodes.iter()
+        let delta = t2.lct() - crit.nc_end.iter()
             .filter(|x| x.id() != t2.id())
             .map(|x| x.lct()).max().expect("No max S2 found");
-        let t: &node::Node = s2.iter().min_by_key(|t| h(t, t2, max_makespan, crit, delta)).expect("Could not minimize h2");
+        let t: &node::Node = s2.iter()
+            .min_by_key(|t| right_bounded_entropy(t, t2, max_makespan, crit, delta))
+            .expect("Could not minimize h2");
 
         if g(t, t2, max_makespan) <= g(t2, t, max_makespan) {
             vec!((t, t2), (t2, t))
@@ -254,12 +296,15 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
 
 /// Find the critical on a resource, if there is no found then there inconsistency
-fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
+/// It can happen that a resource is already completely scheduled.
+fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
     
     // Get the nodes on the resources    
     let resource = graph.nodes().iter()
         .filter(|n| n.machine_id() == Some(resource_id as u32))        
         .collect_vec();
+
+    
 
     // TaskIntervals can have a node in front or after all the nodes in the taskinterval, but these scheduled nodes should
     // not be part of the definition of the interval
@@ -285,19 +330,22 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> TaskInterval<'a> {
         }
     }
 
-    debug_assert!(task_intervals.len() >= 1, "Not enough tasks found: {}\necsts: {:?}\n lcts: {:?}", 
-        task_intervals.len(),
-        ests,
-        lcts
-    );
+    // No interesting task intervals found on this resource
+    if task_intervals.len() == 0 {
+        return None;
+    }
+
+    // debug_assert!(task_intervals.len() >= 1, "Not enough tasks found: {}\necsts: {:?}\n lcts: {:?}", 
+    //     task_intervals.len(),
+    //     ests,
+    //     lcts
+    // );
 
     // Only resources are considered that have more than 1 node anyway.
     task_intervals.into_iter()
         .filter(|x| x.nodes.len() > 1)
         //.inspect(|x| println!("\n\n{} - task intervals: {:?}", resource_id, x))
         .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32)
-        .expect(&format!("Cannot find task intervals: r-{}", resource_id))
-    
 }
 
 /// Calculate the slack for all operations on a resource
@@ -313,20 +361,32 @@ fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
     max - min - p
 }
 
-fn h(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
-    let t1b = g(t1, t2, max_makespan);
-    let tb1 = g(t2, t1, max_makespan);
+
+/// When fixing t1 -> t2, this function returns the expected reduction in entropy on the domain
+fn left_bounded_entropy(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
+    let t1_tb = g(t1, t2, max_makespan);
+    let tb_t1 = g(t2, t1, max_makespan);
+
+    // If this assert fails then that means that t2 cannot be placed to the left
+    debug_assert!(task_interval.upper >= t2.est() + task_interval.processing);
 
     let new_slack = task_interval.upper - t2.est() - task_interval.processing;
     let fff = evaluation(new_slack, delta, max_makespan);
 
-    if t1b > tb1 || t1b > fff { // Is it bigger than one of them
-        t1b
-    } else if tb1 > fff { // Smaller than both of them
-        fff
-    } else {
-        tb1
-    }    
+    std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
+}
+
+fn right_bounded_entropy(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
+    let t1_tb = g(t1, t2, max_makespan);
+    let tb_t1 = g(t2, t1, max_makespan);
+
+    // If this assert fails then that means that t2 cannot be placed
+    debug_assert!(t2.lct() >= task_interval.lower + task_interval.processing);
+
+    let new_slack = t2.lct() - task_interval.lower - task_interval.processing;
+    let fff = evaluation(new_slack, delta, max_makespan);
+
+    std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
 }
 
 fn g(t1: &node::Node, t2: &node::Node, allowed_makespan: u32) -> u32 {
