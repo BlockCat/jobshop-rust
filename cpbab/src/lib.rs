@@ -1,6 +1,7 @@
 extern crate disjunctgraph;
 
 mod node;
+mod task_interval;
 
 use std::collections::VecDeque;
 
@@ -9,6 +10,8 @@ use itertools::Itertools;
 
 // Constrained graph ;
 pub type CGraph = disjunctgraph::LinkedGraph<node::Node>;
+
+type TaskInterval<'a> = task_interval::TaskInterval<'a, CGraph>;
 
 const PAR: u32 = 3;
 
@@ -55,112 +58,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
     current_best
 }
 
-#[derive(Debug)]
-struct TaskInterval<'a> {    
-    upper: u32,
-    lower: u32,
-    processing: u32,
-    nc_start: Vec<&'a node::Node>,
-    nc_end: Vec<&'a node::Node>,
-    nodes: Vec<&'a node::Node>,
-}
 
-impl<'a> TaskInterval<'a> {
-    
-    fn slack(&self) -> u32 {
-        self.upper - self.lower - self.processing
-    }
-
-    /// In this task interval, there should be enough space to execute all operations
-    /// upper - lower >= processing
-    fn feasible(&self) -> bool {
-        self.upper >= self.lower + self.processing
-    }
-
-    fn from_interval<'b>(graph: &CGraph, resource: &[&'b node::Node], lower: &node::Node, upper: &node::Node) -> Option<TaskInterval<'b>> {
-
-        // Task intervals should contain operations that have no disjunctions left        
-        let nodes: Vec<&node::Node> = resource.iter()
-            .filter(|node| node.est() >= lower.est() && node.lct() <= upper.lct())
-            .cloned().collect();
-        
-
-        // TaskIntervals must have by definition 2 or more nodes.
-        if nodes.len() < 2 {
-            return None;
-        }
-
-        // If precedence: {lower -> n | n \in nodes} for all
-        // If precedence: {n -> upper | n \in nodes} for all
-        // if these two checks are true then there is nothing really to check.        
-        if nodes.iter().all(|n| graph.has_precedence(lower, *n) && graph.has_precedence(*n, upper)) 
-        {
-            return None;
-        }        
-
-        let processing = nodes.iter().map(|x| x.weight()).sum();
-
-        // Calculate nc_start: 
-        // NC start is the set of jobs that can be executed before all jobs in S. This is the edge finding part in the paper:
-        // say we have a job t, if up(S) - low(t) - p(S) >= 0 => t can be first
-        // up(S) - low(t) - p(S) >= 0 => up(S) >= low(t) + p(S)
-        // If t was the first in the interval, is there enough space to execute the other nodes?
-
-        let nc_start = nodes.iter()
-            .filter(|node| upper.lct() >= node.est() + processing);
-            
-
-        // Keep nodes that have no predecessor on the same resource
-        // if it has any "other -> node" then it's a nope
-        let nc_start = nc_start
-            .filter(|node| !nodes.iter()
-                .filter(|o| node.id() != o.id())
-                .any(|other| graph.has_precedence(*other, **node)))
-            .map(|x| *x)
-            .collect::<Vec<_>>();
-
-
-        // All nodes within nc_start should be in disjunction to each other.
-        // If a pair of nodes (a, b) was not in disjunction with each other, 
-        // then (a -> b) and b could not be first, or (b -> a) and a could not be first.
-        // Likewise for nc_end.
-        
-        
-        // Calculate nc_end
-        // NC end is the set of jobs that can be executed after all jobs in S.
-        // we have job t: up(t) - p(S) >= low(S) => t can be last
-        // up(t) - p(S) >= low(S) ========> up(t) >= low(S) + p(S)
-        // If t was the last interval, is there enough space to execute the other nodes?        
-        let nc_end = nodes.iter()
-            .filter(|node| node.lct() >= lower.est() + processing);
-            
-
-        // Keep nodes that have no successor on the same resource 
-        // if it has any "node -> other" then it's a nope
-        let nc_end = nc_end
-            .filter(|node| !nodes.iter().any(|other| graph.has_precedence(**node, *other)))
-            .map(|x| *x)
-            .collect::<Vec<_>>();
-
-        let ti = TaskInterval {
-            upper: upper.lct(), 
-            lower: lower.est(),
-            processing, nodes,
-            nc_start, nc_end
-        };
-
-        debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
-        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
-        debug_assert!(ti.nc_start.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])), 
-            "All nodes within nc_start should have disjunctions between each other, \nnodes: {:?}\n\n graph: {:?}", ti.nc_start, graph, );
-       
-        debug_assert!(ti.nc_end.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])),
-            "All nodes within nc_end should have disjunctions between each other, {}", ti.nc_start.len());
-        debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
-
-        Some(ti)
-    }
-}
 
 fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> Vec<(&'a node::Node, &'a node::Node)> {
 
@@ -198,7 +96,6 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
     let t1 = crit.nc_start.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
     let t2 = crit.nc_end.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
-    
     
     let s1 = crit.nc_start.iter().filter(|x| x.id() != t1.id()).collect_vec();
     let s2 = crit.nc_end.iter().filter(|x| x.id() != t2.id()).collect_vec();
@@ -244,51 +141,13 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
     
     // Get the nodes on the resources    
-    let resource = graph.nodes().iter()
-        .filter(|n| n.machine_id() == Some(resource_id as u32))        
-        .collect_vec();
-
+    let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph);
     
-
-    // TaskIntervals can have a node in front or after all the nodes in the taskinterval, but these scheduled nodes should
-    // not be part of the definition of the interval
-    let ests = resource.iter().sorted_by_key(|n| n.est()).collect::<Vec<_>>();
-    let lcts = resource.iter().sorted_by_key(|n| n.lct()).collect::<Vec<_>>();
-    
-    let mut j = 0;
-
-    let mut task_intervals: Vec<TaskInterval<'a>> = Vec::with_capacity(resource.len().pow(2));
-
-    for i in 0..ests.len() {
-        let lower = ests[i];
-        while lcts[j].lct() < lower.est() {
-            j += 1;
-        }
-        for j in j..lcts.len() {
-            let upper = lcts[j];
-            if lower.est() < upper.lct() {
-                if let Some(ti) = TaskInterval::from_interval(graph, &resource, lower, upper) {
-                    task_intervals.push(ti);
-                }
-            }
-        }
-    }
-
-    // No interesting task intervals found on this resource
-    if task_intervals.len() == 0 {
-        return None;
-    }
-
-    // debug_assert!(task_intervals.len() >= 1, "Not enough tasks found: {}\necsts: {:?}\n lcts: {:?}", 
-    //     task_intervals.len(),
-    //     ests,
-    //     lcts
-    // );
+    debug_assert!(task_intervals.len() > 0);
 
     // Only resources are considered that have more than 1 node anyway.
     task_intervals.into_iter()
-        .filter(|x| x.nodes.len() > 1)
-        //.inspect(|x| println!("\n\n{} - task intervals: {:?}", resource_id, x))
+        .filter(|x| x.nodes.len() > 1)        
         .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32)
 }
 
