@@ -89,15 +89,23 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
     
     let resource_nodes = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource_id as u32)).collect_vec();
     let crit_slack = crit.slack();
+
+    let can_be_first = |t: &&&node::Node| -> bool {
+        t.est() <= t1.est() + crit_slack 
+        && t.id() != t1.id()
+        && graph.has_disjunction(&t1.id(), &t.id())        
+    };
+    let can_be_last = |t: &&&node::Node| -> bool {
+        t.lct() + crit_slack >= t2.lct()
+        && t.id() != t2.id()
+        && graph.has_disjunction(&t.id(), &t2.id())        
+    };
+    
     let s1 = resource_nodes.iter()
-        .filter(|t| t.est() <= t1.est() + crit_slack)
-        .filter(|t| t.id() != t1.id())
-        .filter(|t| !graph.has_precedence(&t.id(), &t1.id()))
+        .filter(can_be_first)
         .collect_vec();
     let s2 = resource_nodes.iter()
-        .filter(|t| t.lct() + crit_slack >= t2.lct())
-        .filter(|t| t.id() != t2.id())
-        .filter(|t| !graph.has_precedence(&t.id(), &t2.id()))
+        .filter(can_be_last)
         .collect_vec();
 
     println!("{} <= {}", s1.len(), s2.len());
@@ -105,7 +113,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
-    if s1.len() <= s2.len() {
+    if (s1.len() <= s2.len() && s1.len() > 0) || s2.len() == 0 {
         let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
