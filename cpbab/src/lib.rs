@@ -50,7 +50,6 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                     if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
                         stack.push_front(graph);
                     }
-                } else {
                 }
             }
         }
@@ -70,49 +69,49 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
             .filter(|x| x.machine_id() == Some(**id as u32))
             .any(|x| graph.node_has_disjunction(x))
     };
-    let criticals: Vec<Option<TaskInterval>> = resources.iter()
+    let criticals: Vec<(usize, TaskInterval)> = resources.iter()
         .filter(resource_filter)
-        .map(|id| crit(*id, graph))
+        .filter_map(|id| crit(*id, graph).map(|x| (*id, x)))
         .collect();
     
-
-    // Calculate the slack for each resource
-    let resource_slacks: Vec<u32> = resources.iter().map(|id| resource_slack(*id as u32, graph)).collect(); 
-    
     // Find the resource with the most constrained task interval
-    let (crit, _) = criticals.iter().zip(resource_slacks)        
-        .filter_map(|(cr, rr)| {
-            if let Some(cr) = cr {
-                Some((cr, cr.slack() as u32 * rr * std::cmp::min(PAR, num_choices(cr) as u32)))
-            } else {
-                None
-            }
+    let (resource_id, crit) = criticals.into_iter()
+        .min_by_key(|(id, cr)| {
+            let resource_slack = resource_slack(*id as u32, graph);
+            cr.slack() as u32 * resource_slack * std::cmp::min(PAR, num_choices(cr) as u32)
         })
-        //.inspect(|p| println!("cr: {:?}", p.1))
-        //.filter(|(_, rr)| *rr >= 0)
-        .min_by_key(|(_, rr)| *rr)
         .expect("Can't find critical");
-
+    
     debug_assert!(!crit.nodes.iter().all(|x| !graph.node_has_disjunction(*x)));
 
-    let t1 = crit.nc_start.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
-    let t2 = crit.nc_end.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
+    let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
+    let t2 = crit.nodes.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
-    let s1 = crit.nc_start.iter().filter(|x| x.id() != t1.id()).collect_vec();
-    let s2 = crit.nc_end.iter().filter(|x| x.id() != t2.id()).collect_vec();
+    let resource_nodes = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource_id as u32)).collect_vec();
+    let crit_slack = crit.slack();
+    let s1 = resource_nodes.iter()
+        .filter(|t| t.est() <= t1.est() + crit_slack)
+        .filter(|t| t.id() != t1.id())
+        .filter(|t| !graph.has_precedence(&t.id(), &t1.id()))
+        .collect_vec();
+    let s2 = resource_nodes.iter()
+        .filter(|t| t.lct() + crit_slack >= t2.lct())
+        .filter(|t| t.id() != t2.id())
+        .filter(|t| !graph.has_precedence(&t.id(), &t2.id()))
+        .collect_vec();
 
     println!("{} <= {}", s1.len(), s2.len());
     // 0 <= 0, this means there
 
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
-    if s1.len() <= s2.len() && s1.len() > 0 {
+    if s1.len() <= s2.len() {
         let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
 
-        let t: &node::Node = s1.iter()
-            .min_by_key(|t| left_bounded_entropy(t1, t, max_makespan, crit, delta))
+        let t = s1.iter()
+            .min_by_key(|t| left_bounded_entropy(t1, t, max_makespan, &crit, delta))
             .expect("Could not minimize h1");
 
         if g(t1, t, max_makespan) <= g(t, t1, max_makespan) {
@@ -124,8 +123,8 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
         let delta = t2.lct() - crit.nodes.iter()
             .filter(|x| x.id() != t2.id())
             .map(|x| x.lct()).max().expect("No max S2 found");
-        let t: &node::Node = s2.iter()
-            .min_by_key(|t| right_bounded_entropy(t, t2, max_makespan, crit, delta))
+        let t = s2.iter()
+            .min_by_key(|t| right_bounded_entropy(t, t2, max_makespan, &crit, delta))
             .expect("Could not minimize h2");
 
         if g(t, t2, max_makespan) <= g(t2, t, max_makespan) {
@@ -147,8 +146,7 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
     debug_assert!(task_intervals.len() > 0);
 
     // Only resources are considered that have more than 1 node anyway.
-    task_intervals.into_iter()
-        .filter(|x| x.nodes.len() > 1)        
+    task_intervals.into_iter()        
         .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32)
 }
 
@@ -167,45 +165,41 @@ fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
 
 
 /// When fixing t1 -> t2, this function returns the expected reduction in entropy on the domain
-fn left_bounded_entropy(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
-    let t1_tb = g(t1, t2, max_makespan);
-    let tb_t1 = g(t2, t1, max_makespan);
+fn left_bounded_entropy(t1: &node::Node, tb: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
+    let t1_tb = g(t1, tb, max_makespan);
+    let tb_t1 = g(tb, t1, max_makespan);
 
     // If this assert fails then that means that t2 cannot be placed to the left
-    debug_assert!(task_interval.upper >= t2.est() + task_interval.processing);
+    debug_assert!(task_interval.upper >= tb.est() + task_interval.processing);
 
-    let new_slack = task_interval.upper - t2.est() - task_interval.processing;
+    let new_slack = task_interval.upper - tb.est() - task_interval.processing;
     let fff = evaluation(new_slack, delta, max_makespan);
 
     std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
 }
 
-fn right_bounded_entropy(t1: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
-    let t1_tb = g(t1, t2, max_makespan);
-    let tb_t1 = g(t2, t1, max_makespan);
+fn right_bounded_entropy(ta: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
+    let ta_t2 = g(ta, t2, max_makespan);
+    let t2_ta = g(t2, ta, max_makespan);
 
     // If this assert fails then that means that t2 cannot be placed
-    debug_assert!(t2.lct() >= task_interval.lower + task_interval.processing);
+    debug_assert!(ta.lct() >= task_interval.lower + task_interval.processing);
 
-    let new_slack = t2.lct() - task_interval.lower - task_interval.processing;
+    let new_slack = ta.lct() - task_interval.lower - task_interval.processing;
     let fff = evaluation(new_slack, delta, max_makespan);
 
-    std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
+    std::cmp::max(ta_t2, std::cmp::min(t2_ta, fff))
 }
 
-fn g(t1: &node::Node, t2: &node::Node, allowed_makespan: u32) -> u32 {
-    let da = (t1.lct() + t2.weight()).saturating_sub(t2.lct());
-    let db = (t1.est() + t1.weight()).saturating_sub(t2.est());
-    
+/// Assess impact of an ordering ta -> tb
+fn g(ta: &node::Node, tb: &node::Node, allowed_makespan: u32) -> u32 {
+    let da = ta.lct().saturating_sub(tb.lst());
+    let db = (ta.est() + ta.weight()).saturating_sub(tb.est());    
 
-    let a = evaluation(t1.lct() - t1.est() - t1.weight(), da, allowed_makespan);
-    let b = evaluation(t2.lct() - t2.est() - t2.weight(), db, allowed_makespan);
+    let a = evaluation(ta.lct() - ta.est() - ta.weight(), da, allowed_makespan);
+    let b = evaluation(tb.lct() - tb.est() - tb.weight(), db, allowed_makespan);
 
-    if a < b {
-        a
-    } else {
-        b
-    }
+    std::cmp::min(a, b)
 }
 
 fn evaluation(slack: u32, delta: u32, max_makespan: u32) -> u32 {
@@ -226,6 +220,7 @@ fn num_choices(task_interval: &TaskInterval) -> usize {
 /// According to: Adjustment of heads and tails for the job-shop problem (J. Carlier and E. Pinson)
 /// Chapter 4.4: Lower bound
 /// Warning: Does not implement all three bounds.
+/// A study of lower bounds is acceptable
 fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {    
     let resources = resources.iter()
         .map(|resource| graph.nodes().iter().filter(move |n| n.machine_id() == Some(*resource as u32))) // Returns an I_k on machine M_k
