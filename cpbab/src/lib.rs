@@ -2,6 +2,7 @@ extern crate disjunctgraph;
 
 mod node;
 mod task_interval;
+mod propagation;
 
 use std::collections::VecDeque;
 
@@ -45,7 +46,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
         } else {
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
                 let mut graph = node.clone().fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                if graph.propagate(t1, t2).is_ok() {                    
+                if propagation::propagate(&mut graph, t1, t2).is_ok() {                    
                     if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
                         stack.push_front(graph);
                     }

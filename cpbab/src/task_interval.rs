@@ -1,7 +1,5 @@
 use itertools::Itertools;
-use disjunctgraph::{ ConstrainedNode, Graph, GraphNode, NodeId };
-
-use crate::CGraph;
+use disjunctgraph::{ ConstrainedNode, Graph, GraphNode };
 
 #[derive(Debug)]
 pub struct TaskInterval<'a, T: Graph> where T::Node: ConstrainedNode + std::fmt::Debug {    
@@ -25,7 +23,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         self.upper >= self.lower + self.processing
     }
 
-    pub fn from_interval<'b>(graph: &CGraph, resource: &[&'b T::Node], lower: &T::Node, upper: &T::Node) -> Option<TaskInterval<'b, T>> {
+    pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &T::Node, upper: &T::Node) -> Option<TaskInterval<'b, T>> {
 
         // Task intervals should contain operations that have no disjunctions left        
         let nodes: Vec<&T::Node> = resource.iter()
@@ -74,7 +72,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node: {}\n {:?}", ti.nodes.len(), ti.nodes);
         debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node");
         debug_assert!(ti.nc_start.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])), 
-            "All nodes within nc_start should have disjunctions between each other, \nnodes: {:?}\n\n graph: {:?}", ti.nc_start, graph, );
+            "All nodes within nc_start should have disjunctions between each other, {}", ti.nc_start.len());
        
         debug_assert!(ti.nc_end.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])),
             "All nodes within nc_end should have disjunctions between each other, {}", ti.nc_start.len());
@@ -84,14 +82,14 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
     }
 }
 
-pub fn find_task_intervals(resource: u32, graph: &CGraph) -> Vec<TaskInterval<CGraph>> {
-    type Node = <CGraph as Graph>::Node;
+pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T) -> Vec<TaskInterval<T>> where T::Node: ConstrainedNode + std::fmt::Debug {
+    
     let operations = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource)).collect_vec();
-    let ests: Vec<&Node> = operations.iter().unique_by(|s| s.est()).sorted_by_key(|s| s.est()).cloned().collect_vec();
-    let lcts: Vec<&Node> = operations.iter().unique_by(|s| s.lct()).sorted_by_key(|s| s.lct()).cloned().collect_vec();
+    let ests: Vec<&T::Node> = operations.iter().unique_by(|s| s.est()).sorted_by_key(|s| s.est()).cloned().collect_vec();
+    let lcts: Vec<&T::Node> = operations.iter().unique_by(|s| s.lct()).sorted_by_key(|s| s.lct()).cloned().collect_vec();
 
     let mut j = 0;
-    let mut task_intervals: Vec<TaskInterval<CGraph>> = Vec::with_capacity(operations.len().pow(2));
+    let mut task_intervals: Vec<TaskInterval<T>> = Vec::with_capacity(operations.len().pow(2));
 
     for i in 0..ests.len() {
         let lower = ests[i];
@@ -111,6 +109,7 @@ pub fn find_task_intervals(resource: u32, graph: &CGraph) -> Vec<TaskInterval<CG
     task_intervals
 }
 
-pub fn propagate_task_interval(resources: &[usize], graph: &mut CGraph) {
+/*
+pub fn propagate_task_interval<T>(resources: &[usize], graph: &mut T) where T::Node: ConstrainedNode + std::fmt::Debug {
     
-}
+}*/

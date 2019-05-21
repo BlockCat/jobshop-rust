@@ -10,85 +10,6 @@ pub struct LinkedGraph<T: NodeId + Clone> {
     disjunctions: Vec<HashSet<usize>>
 }
 
-impl<T: ConstrainedNode + Clone> LinkedGraph<T> {
-
-    /// Propagate constraints for a node, note that node itself does not change, only the surrounding nodes.
-    /// Propagates for the fixation that is node_1 -> node_2
-    pub fn propagate(&mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), ()> {
-        use std::collections::VecDeque;
-        
-        let mut change_occured = true;
-
-        
-        enum Propagation {
-            LST { id: usize, max_lst: u32},
-            EST { id: usize, min_est: u32}
-        }        
-        let mut stack: VecDeque<Propagation> = VecDeque::with_capacity(self.nodes.len());
-        
-        while change_occured {
-            stack.clear();
-            change_occured = false;
-            // Add the successors
-            let n2_est = self.nodes[node_2.id()].est() + self.nodes[node_2.id()].weight();
-            for successor in self.successors(node_2) {
-                stack.push_back(Propagation::EST {
-                    id: successor.id(),
-                    min_est: n2_est
-                });
-            }
-
-            let n1_lst = self.nodes[node_1.id()].lst();
-            for predecessor in self.predecessors(node_1) {
-                stack.push_back(Propagation::LST {
-                    id: predecessor.id(),
-                    max_lst: n1_lst
-                });
-            }
-
-            while let Some(prop) = stack.pop_front() {
-                match prop {
-                    Propagation::LST { id, max_lst } => {
-                        let node = &self[id];
-                        if max_lst < node.lst() {
-                            if node.feasible_lst(max_lst) {
-                                stack.extend(self.successors(&id).map(|s| {
-                                    Propagation::LST {
-                                        id: id,
-                                        max_lst: max_lst + node.weight()
-                                    }
-                                }));
-                                self[id].set_lct(max_lst);
-                            } else {
-                                return Err(());
-                            }
-                        }
-                    },
-                    Propagation::EST { id, min_est } => {
-                        let node = &self[id];
-                        if min_est > node.est() {
-                            if node.feasible_est(min_est) {
-                                stack.extend(self.predecessors(&id).map(|s| {
-                                    Propagation::EST {
-                                        id: id,
-                                        min_est: min_est - s.weight()
-                                    }    
-                                }));
-                                self[id].set_est(min_est);
-                            } else {
-                                return Err(());
-                            }
-                        }
-                    }
-                }
-            }
-            change_occured = self.search_orders();
-        }
-
-        Ok(())
-    }
-}
-
 impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
     type Node = T;
 
@@ -137,10 +58,6 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 	fn sink(&self) -> &T {
 		&self.nodes().last().unwrap()
 	}
-
-    /*fn successors<'a>(&'a self, id: &impl NodeId) -> Vec<&T> {
-        self.successors[id.id()].iter().map(|x| &self.nodes[*x]).collect()
-	}*/
     
     fn successors(&self, id: &impl NodeId) -> NodeIterator<Self> {
         NodeIterator(Box::new(self.successors[id.id()].iter().map(move |x| &self.nodes[*x])))
@@ -224,6 +141,19 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         }
 	}
 
+    /// Graph contains relation: node_1 -> node_2
+    fn has_precedence(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool {
+        self.successors[node_1.id()].contains(&node_2.id())
+    }
+
+    fn has_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool {
+        self.disjunctions[node_1.id()].contains(&node_2.id())
+    }
+
+    fn node_has_disjunction(&self, node: &impl NodeId) -> bool {
+        !self.disjunctions[node.id()].is_empty()
+    }
+
     fn search_orders(&mut self) -> bool where Self::Node: ConstrainedNode {
         
         let mut change_occured = false;
@@ -279,22 +209,7 @@ impl<T: NodeId + Clone> std::ops::IndexMut<usize> for LinkedGraph<T> {
 
 
 impl <T: NodeId + Clone> LinkedGraph<T> {
-    pub fn has_disjunctions(&self) -> bool {
-        self.nodes.iter().any(|node| self.node_has_disjunction(node))        
-    }
-
-    /// Graph contains relation: node_1 -> node_2
-    pub fn has_precedence(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool {
-        self.successors[node_1.id()].contains(&node_2.id())
-    }
-
-    pub fn has_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool {
-        self.disjunctions[node_1.id()].contains(&node_2.id())
-    }
-
-    pub fn node_has_disjunction(&self, node: &impl NodeId) -> bool {
-        !self.disjunctions[node.id()].is_empty()
-    }
+    
 }
 
 impl<T: ConstrainedNode + Clone> std::fmt::Display for LinkedGraph<T> {

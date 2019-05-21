@@ -137,6 +137,16 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;    
 
+    fn has_disjunctions(&self) -> bool {
+        self.nodes().iter().any(|node| self.node_has_disjunction(node))        
+    }
+
+    /// Graph contains relation: node_1 -> node_2
+    fn has_precedence(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool;
+    fn has_disjunction(&self, node_1: &impl NodeId, node_2: &impl NodeId) -> bool;
+
+    fn node_has_disjunction(&self, node: &impl NodeId) -> bool;
+
     /// Retrieves topology ordering in the graph, starting at the source, ending at the sink.
     fn topology<'a>(&'a self) -> TopologyIterator<'a, Self> {
 
