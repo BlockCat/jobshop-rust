@@ -85,24 +85,18 @@ impl<'a> TaskInterval<'a> {
             .cloned().collect();
         
 
-        // TaskIntervals have by definition 2 or more nodes.
+        // TaskIntervals must have by definition 2 or more nodes.
         if nodes.len() < 2 {
             return None;
         }
 
-        // if the lower node is already scheduled in front of all other nodes
-        // If none of the nodes have a disjunction with the lower
-        // doing this will make sure the a completely scheduled resource will not have a task interval,
-        // and that's how it should be right?
-        if nodes.iter().all(|n| !graph.has_disjunction(*n, lower)) {
+        // If precedence: {lower -> n | n \in nodes} for all
+        // If precedence: {n -> upper | n \in nodes} for all
+        // if these two checks are true then there is nothing really to check.        
+        if nodes.iter().all(|n| graph.has_precedence(lower, *n) && graph.has_precedence(*n, upper)) 
+        {
             return None;
-        }
-
-        // If none of the nodes have a disjunction with the upper
-        if nodes.iter().all(|n| !graph.has_disjunction(upper, *n)) {    
-            return None;
-        }
-        
+        }        
 
         let processing = nodes.iter().map(|x| x.weight()).sum();
 
@@ -136,8 +130,7 @@ impl<'a> TaskInterval<'a> {
         // NC end is the set of jobs that can be executed after all jobs in S.
         // we have job t: up(t) - p(S) >= low(S) => t can be last
         // up(t) - p(S) >= low(S) ========> up(t) >= low(S) + p(S)
-        // If t was the last interval, is there enough space to execute the other nodes?
-        
+        // If t was the last interval, is there enough space to execute the other nodes?        
         let nc_end = nodes.iter()
             .filter(|node| node.lct() >= lower.est() + processing);
             
@@ -148,14 +141,6 @@ impl<'a> TaskInterval<'a> {
             .filter(|node| !nodes.iter().any(|other| graph.has_precedence(**node, *other)))
             .map(|x| *x)
             .collect::<Vec<_>>();
-
-        //compile_error!("Something is totally wrong when calculating nc_end"); 
-
-        if nc_start.len() == 1 && !graph.node_has_disjunction(nc_start[0]) // Nothing to schedule at the start
-            && nc_end.len() == 1 && !graph.node_has_disjunction(nc_end[0]) // Nothing to schedule at the end
-        {
-            return None;
-        }
 
         let ti = TaskInterval {
             upper: upper.lct(), 
@@ -171,16 +156,6 @@ impl<'a> TaskInterval<'a> {
        
         debug_assert!(ti.nc_end.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])),
             "All nodes within nc_end should have disjunctions between each other, {}", ti.nc_start.len());
-
-        // Do all nodes that can be placed first need a disjunction?        
-        debug_assert!(
-            ti.nc_start.iter().all(|n| graph.node_has_disjunction(*n)) || 
-            ti.nc_end.iter().all(|n| graph.node_has_disjunction(*n)),
-            "Neither nodes in nc_start nor in nc_end has disjunctions. \n graph: {}\nstart: {:?} \nend: {:?}\nlower: {:?}\nupper: {:?}\n", 
-            graph,
-            ti.nc_start,
-            ti.nc_end,
-            lower, upper);
         debug_assert!(ti.feasible(), "Failed feasible: {:?}", ti);
 
         Some(ti)
@@ -221,51 +196,20 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
     debug_assert!(!crit.nodes.iter().all(|x| !graph.node_has_disjunction(*x)));
 
-    if crit.nc_start.len() == 1 {
-        let first_node = crit.nc_start[0];        
-        if let Some(other_node) = crit.nodes.iter().find(|o| graph.has_disjunction(first_node, **o)) {
-            return vec!((first_node, other_node));
-        }
-    }
-
-    if crit.nc_end.len() == 1 {
-        let last_node = crit.nc_end[0];
-        if let Some(other_node) = crit.nodes.iter().find(|o| graph.has_disjunction(last_node, **o)) {
-            return vec!((other_node, last_node));
-        }
-    }
-    
     let t1 = crit.nc_start.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
     let t2 = crit.nc_end.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
-    let crit_slack = crit.slack();
     
-    let s1 = crit.nodes.iter()
-        .filter(|t| t.id() != t1.id())
-        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t1)))        
-        .filter(|t| crit.upper >= t.est() + crit.processing)
-        .filter(|t| graph.has_disjunction(*t1, **t)) // The nodes can be ordered, and are on the same resource    
-    .collect::<Vec<_>>();
-    
-    let s2 = crit.nodes.iter()
-        .filter(|t| t.id() != t2.id())
-        //.inspect(|t| println!("{:?}, ds: {}", t, graph.has_disjunction(**t, *t2)))        
-        .filter(|t| t.lct() >= crit.lower + crit.processing)
-        .filter(|t| graph.has_disjunction(**t, *t2))
-    .collect::<Vec<_>>();
+    let s1 = crit.nc_start.iter().filter(|x| x.id() != t1.id()).collect_vec();
+    let s2 = crit.nc_end.iter().filter(|x| x.id() != t2.id()).collect_vec();
 
-    /*println!("\nCritical:\n {:#?}", crit.nodes);
-    println!("\nStart: \n{:?}", crit.nc_start);
-    println!("\ns1: \n{:?}", s1);*/
+    println!("{} <= {}", s1.len(), s2.len());
+    // 0 <= 0, this means there
 
-    //debug_assert!(s1.len() > 0 || s2.len() > 0, "No pair is possibles, {}\ns{:?}\ne{:?}", graph, crit.nc_start, crit.nc_end);
-    if s1.len() == 0 && s2.len() == 0 {
-        return vec!();
-    }
-    let shouldbes1 = s2.len() == 0;
+    debug_assert!(s1.len() > 0 || s2.len() > 0);
 
-    if s1.len() <= s2.len() || shouldbes1 {
-        let delta = crit.nc_start.iter()
+    if s1.len() <= s2.len() && s1.len() > 0 {
+        let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
 
@@ -279,7 +223,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
             vec!((t, t1), (t1, t))
         }
     } else {
-        let delta = t2.lct() - crit.nc_end.iter()
+        let delta = t2.lct() - crit.nodes.iter()
             .filter(|x| x.id() != t2.id())
             .map(|x| x.lct()).max().expect("No max S2 found");
         let t: &node::Node = s2.iter()
