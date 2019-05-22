@@ -1,29 +1,43 @@
 use itertools::Itertools;
-use disjunctgraph::{ ConstrainedNode, Graph, GraphNode };
+use disjunctgraph::{ ConstrainedNode, Graph, GraphNode, NodeId };
 
 #[derive(Debug)]
 pub struct TaskInterval<'a, T: Graph> where T::Node: ConstrainedNode + std::fmt::Debug {    
-    pub upper: u32,
-    pub lower: u32,
+    pub upper: &'a T::Node,
+    pub lower: &'a T::Node,
     pub processing: u32,
     pub nc_start: Vec<&'a T::Node>,
     pub nc_end: Vec<&'a T::Node>,
     pub nodes: Vec<&'a T::Node>,
 }
 
+impl<'a, T: Graph> std::fmt::Display for TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(l: {}, u:{} -> start: {:?}, end: {:?}, nodes: {:?})", 
+            self.lower(), 
+            self.upper(), 
+            self.nc_start.iter().map(|x| x.id()).collect_vec(),
+            self.nc_end.iter().map(|x| x.id()).collect_vec(),
+            self.nodes.iter().map(|x| x.id()).collect_vec())
+    }
+}
+
 impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug {
     
     pub fn slack(&self) -> u32 {
-        self.upper - self.lower - self.processing
+        self.upper() - self.lower() - self.processing
     }
 
     /// In this task interval, there should be enough space to execute all operations
     /// upper - lower >= processing
     fn feasible(&self) -> bool {
-        self.upper >= self.lower + self.processing
+        self.upper() >= self.lower() + self.processing
     }
 
-    pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &T::Node, upper: &T::Node) -> Option<TaskInterval<'b, T>> {
+    pub fn upper(&self) -> u32 { self.upper.lct() }
+    pub fn lower(&self) -> u32 { self.lower.est() }
+
+    pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &'b T::Node, upper: &'b T::Node) -> Option<TaskInterval<'b, T>> {
 
         // Task intervals should contain operations that have no disjunctions left        
         let nodes: Vec<&T::Node> = resource.iter()
@@ -38,10 +52,8 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
 
         let processing = nodes.iter().map(|x| x.weight()).sum();
 
-        // Calculate nc_start: 
+        
         // NC start is the set of jobs that can be executed before all jobs in S. This is the edge finding part in the paper:
-        // say we have a job t, if up(S) - low(t) - p(S) >= 0 => t can be first
-        // up(S) - low(t) - p(S) >= 0 => up(S) >= low(t) + p(S)
         // If t was the first in the interval, is there enough space to execute the other nodes?
         // if it has any "node -> other" then node can't be first 
         let nc_start = nodes.iter()
@@ -50,10 +62,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
             .map(|x| *x)
             .collect::<Vec<_>>();
         
-        // Calculate nc_end
-        // NC end is the set of jobs that can be executed after all jobs in S.
-        // we have job t: up(t) - p(S) >= low(S) => t can be last
-        // up(t) - p(S) >= low(S) ========> up(t) >= low(S) + p(S)
+        // NC end is the set of jobs that can be executed after all jobs in S.        
         // If t was the last interval, is there enough space to execute the other nodes?
         // if it has any "other -> node" then node can't be last
         let nc_end = nodes.iter()
@@ -63,8 +72,8 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
             .collect::<Vec<_>>();
 
         let ti = TaskInterval {
-            upper: upper.lct(), 
-            lower: lower.est(),
+            upper: upper, 
+            lower: lower,
             processing, nodes,
             nc_start, nc_end
         };

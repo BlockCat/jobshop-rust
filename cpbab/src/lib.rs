@@ -1,3 +1,5 @@
+#![feature(drain_filter)]
+
 extern crate disjunctgraph;
 
 mod node;
@@ -38,7 +40,8 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
         // Check if graph has disjunctions left.
         if !node.has_disjunctions() {
             // We are a complete schedule!
-            let length = node.critical_length().expect("Could not calculate critical length");
+            
+            let length = dbg!(node.critical_length().expect("Could not calculate critical length"));
             if length <= upper_bound {
                 upper_bound = length;
                 current_best = node;
@@ -150,6 +153,11 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
     
     // Get the nodes on the resources    
     let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph);
+
+    println!("r{}, graph: {}", resource_id, graph);
+    for ti in task_intervals.iter() {
+        println!("ti: {}", ti);
+    }
     
     debug_assert!(task_intervals.len() > 0);
 
@@ -178,9 +186,9 @@ fn left_bounded_entropy(t1: &node::Node, tb: &node::Node, max_makespan: u32, tas
     let tb_t1 = g(tb, t1, max_makespan);
 
     // If this assert fails then that means that t2 cannot be placed to the left
-    debug_assert!(task_interval.upper >= tb.est() + task_interval.processing);
+    debug_assert!(task_interval.upper() >= tb.est() + task_interval.processing);
 
-    let new_slack = task_interval.upper - tb.est() - task_interval.processing;
+    let new_slack = task_interval.upper() - tb.est() - task_interval.processing;
     let fff = evaluation(new_slack, delta, max_makespan);
 
     std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
@@ -191,9 +199,9 @@ fn right_bounded_entropy(ta: &node::Node, t2: &node::Node, max_makespan: u32, ta
     let t2_ta = g(t2, ta, max_makespan);
 
     // If this assert fails then that means that t2 cannot be placed
-    debug_assert!(ta.lct() >= task_interval.lower + task_interval.processing);
+    debug_assert!(ta.lct() >= task_interval.lower() + task_interval.processing);
 
-    let new_slack = ta.lct() - task_interval.lower - task_interval.processing;
+    let new_slack = ta.lct() - task_interval.lower() - task_interval.processing;
     let fff = evaluation(new_slack, delta, max_makespan);
 
     std::cmp::max(ta_t2, std::cmp::min(t2_ta, fff))

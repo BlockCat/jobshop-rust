@@ -93,7 +93,7 @@ mod tests {
     fn big_problem() -> Problem {
         Problem::from_reader(r"10
 5
-666
+650
 53 21 34 55 95
 21 71 26 52 16
 12 42 31 39 98
