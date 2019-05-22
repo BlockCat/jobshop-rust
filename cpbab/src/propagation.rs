@@ -55,8 +55,8 @@ pub fn propagate_lct<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<Hash
     
         if node.lct() > max_lct {
             if node.feasible_lct(max_lct) {
-                let next_lct = max_lct - node.weight();
                 node.set_lct(max_lct);
+                let next_lct = node.lst();
                 stack.extend(graph.predecessors(&id).map(|p| (p.id(), next_lct)));
                 changed.insert(id);
             } else {
@@ -85,8 +85,9 @@ pub fn propagate_est<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<Hash
     
         if node.est() < min_est {
             if node.feasible_est(min_est) {
-                let next_est = min_est + node.weight();
                 node.set_est(min_est);
+                let next_est = min_est + node.weight();
+
                 stack.extend(graph.successors(&id).map(|s| (s.id(), next_est)));
                 changed.insert(id);
             } else {
@@ -98,15 +99,60 @@ pub fn propagate_est<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<Hash
     Ok(changed)
 }
 
+pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
 
+    let tis = task_interval::find_task_intervals(resource, graph);
+
+    let starts: Vec<(usize, usize)> = tis.iter()
+        .filter(|ti| ti.nc_start.len() == 1)
+        .flat_map(|ti| {
+            let id = ti.nc_start[0].id();
+            ti.nodes.iter()
+                .filter(|n| graph.has_disjunction(&n.id(), &id))
+                .map(|n| (id, n.id()))
+                .collect_vec()
+        }).collect();
+
+    let ends: Vec<(usize, usize)> = tis.iter()
+        .filter(|ti| ti.nc_end.len() == 1)
+        .flat_map(|ti| {
+            let id = ti.nc_end[0].id();
+            ti.nodes.iter()
+                .filter(|n| graph.has_disjunction(&n.id(), &id))
+                .map(|n| (n.id(), id))
+                .collect_vec()
+        }).collect();
+
+
+    println!("Found: {:?}", starts);
+    println!("Found: {:?}", ends);
+
+    for (other, end) in ends {
+        graph.fix_disjunction(&other, &end).or(Err(())).or(Err(()))?;
+        propagate_est(&other, graph)?;
+        propagate_est(&end, graph)?;
+    }
+    
+    for (start, other) in starts {
+        graph.fix_disjunction(&start, &other).or(Err(())).or(Err(()))?;
+        propagate_est(&start, graph)?;
+        propagate_est(&other, graph)?;
+    }
+
+    Ok(())
+}
 /// Propagate a fixation node_1 -> node_2
-pub fn propagate_fixation<I: Graph>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), ()> where I::Node: ConstrainedNode {
+pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
     
-    let est_changed = propagate_est(node_1, graph)?;
-    let lct_changed = propagate_lct(node_2, graph)?;
+    propagate_est(node_1, graph)?;
+    propagate_lct(node_2, graph)?;
+    graph.search_orders();
 
+    let resource = graph[node_1.id()].machine_id().unwrap();
+
+    edge_finding(resource, graph)?;
+    graph.search_orders();
     
-
     Ok(())
 }
 

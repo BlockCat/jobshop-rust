@@ -25,6 +25,9 @@ const PAR: u32 = 3;
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
     root.init_weights(max_makespan).expect("Problem with makespan is not feasible");    
     root.search_orders();
+    for resource in 1..=resources {
+        crate::propagation::edge_finding(resource as u32, &mut root).unwrap();
+    }
     
     let mut upper_bound = max_makespan;
     let mut current_best = root.clone();
@@ -45,11 +48,13 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             if length <= upper_bound {
                 upper_bound = length;
                 current_best = node;
+                panic!("I require recalculation of bounds!");
             }
         } else {
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
-                let mut graph = node.clone().fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                if propagation::propagate(&mut graph, t1, t2).is_ok() {                    
+                let mut graph = node.clone();
+                graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
+                if propagation::propagate_fixation(&mut graph, t1, t2).is_ok() {                    
                     if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
                         stack.push_front(graph);
                     }
@@ -113,7 +118,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
     println!("{} <= {}", s1.len(), s2.len());
     // 0 <= 0, this means there
-
+    println!("{}", crit);
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
     if (s1.len() <= s2.len() && s1.len() > 0) || s2.len() == 0 {
@@ -154,10 +159,10 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
     // Get the nodes on the resources    
     let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph);
 
-    println!("r{}, graph: {}", resource_id, graph);
+    /*println!("r{}, graph: {}", resource_id, graph);
     for ti in task_intervals.iter() {
         println!("ti: {}", ti);
-    }
+    }*/
     
     debug_assert!(task_intervals.len() > 0);
 

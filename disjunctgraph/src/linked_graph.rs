@@ -72,7 +72,7 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 		NodeIterator(Box::new(self.disjunctions[id.id()].iter().map(move |x| &self.nodes[*x])))
 	}
 
-    fn fix_disjunction(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {
+    fn fix_disjunction(&mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), GraphError> {
         if !self.disjunctions[node_1.id()].contains(&node_2.id()) {
             return Err(GraphError::InvalidEdge);
         }
@@ -86,13 +86,15 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         
         // Node_1 -> Node_2
         self.successors[node_1].insert(node_2);
-        self.predecessors[node_2].insert(node_1);        
+        self.predecessors[node_2].insert(node_1); 
+
+        Ok(())       
 		
-        if self.is_cyclic() {
+        /*if self.is_cyclic() {
             Err(disjunctgraph::GraphError::Cyclic)
         } else {
-            Ok(self)
-        }
+            Ok(())
+        }*/
 	}
 
     fn flip_edge(mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError> {

@@ -133,7 +133,7 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
     fn successors(&self, id: &impl NodeId) -> NodeIterator<Self>;
     fn predecessors(&self, id: &impl NodeId) -> NodeIterator<Self>;
     fn disjunctions(&self, id: &impl NodeId) -> NodeIterator<Self>;
-    fn fix_disjunction(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;    
+    fn fix_disjunction(&mut self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), GraphError>;    
     fn flip_edge(self, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<Self, GraphError>;
     fn into_directed(&self) -> Result<Self, GraphError>;    
 
