@@ -23,10 +23,10 @@ const PAR: u32 = 3;
 // Operations that have no disjunctions left are looked at too.
 // I believe cycles can occur? ()
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
-    root.init_weights(max_makespan).expect("Problem with makespan is not feasible");    
-    root.search_orders();
+    root.init_weights().expect("Problem with makespan is not feasible");    
+    root.search_orders(max_makespan);
     for resource in 1..=resources {
-        crate::propagation::edge_finding(resource as u32, &mut root).unwrap();
+        crate::propagation::edge_finding(resource as u32, &mut root, max_makespan).unwrap();
     }
     
     let mut upper_bound = max_makespan;
@@ -47,14 +47,17 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             let length = dbg!(node.critical_length().expect("Could not calculate critical length"));
             if length <= upper_bound {
                 upper_bound = length;
-                current_best = node;
-                panic!("I require recalculation of bounds!");
+                current_best = node;                
             }
         } else {
+            if node.nodes().iter().any(|n| upper_bound < n.head() + n.weight() + n.tail()) {
+                continue;
+            }
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
                 let mut graph = node.clone();
                 graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                if propagation::propagate_fixation(&mut graph, t1, t2).is_ok() {                    
+                
+                if propagation::propagate_fixation(&mut graph, t1, t2, upper_bound).is_ok() {                    
                     if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
                         stack.push_front(graph);
                     }
@@ -68,7 +71,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
 
 
 
-fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> Vec<(&'a node::Node, &'a node::Node)> {
+fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Vec<(&'a node::Node, &'a node::Node)> {
 
     // Calculate the critical task interval for each resource/machine
     // Returns true if machine still has operations that need to be ordered
@@ -79,13 +82,13 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
     };
     let criticals: Vec<(usize, TaskInterval)> = resources.iter()
         .filter(resource_filter)
-        .filter_map(|id| crit(*id, graph).map(|x| (*id, x)))
+        .filter_map(|id| crit(*id, graph, upper_bound).map(|x| (*id, x)))
         .collect();
     
     // Find the resource with the most constrained task interval
     let (resource_id, crit) = criticals.into_iter()
         .min_by_key(|(id, cr)| {
-            let resource_slack = resource_slack(*id as u32, graph);
+            let resource_slack = resource_slack(*id as u32, graph, upper_bound);
             cr.slack() as u32 * resource_slack * std::cmp::min(PAR, num_choices(cr) as u32)
         })
         .expect("Can't find critical");
@@ -93,7 +96,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
     debug_assert!(!crit.nodes.iter().all(|x| !graph.node_has_disjunction(*x)));
 
     let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
-    let t2 = crit.nodes.iter().max_by_key(|x| x.lct()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
+    let t2 = crit.nodes.iter().max_by_key(|x| x.lct(upper_bound)).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
     let resource_nodes = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource_id as u32)).collect_vec();
     let crit_slack = crit.slack();
@@ -104,7 +107,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
         && graph.has_disjunction(&t1.id(), &t.id())        
     };
     let can_be_last = |t: &&&node::Node| -> bool {
-        t.lct() + crit_slack >= t2.lct()
+        t.lct(upper_bound) + crit_slack >= t2.lct(upper_bound)
         && t.id() != t2.id()
         && graph.has_disjunction(&t.id(), &t2.id())        
     };
@@ -116,9 +119,6 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
         .filter(can_be_last)
         .collect_vec();
 
-    println!("{} <= {}", s1.len(), s2.len());
-    // 0 <= 0, this means there
-    println!("{}", crit);
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
     if (s1.len() <= s2.len() && s1.len() > 0) || s2.len() == 0 {
@@ -127,23 +127,23 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
             .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
 
         let t = s1.iter()
-            .min_by_key(|t| left_bounded_entropy(t1, t, max_makespan, &crit, delta))
+            .min_by_key(|t| left_bounded_entropy(t1, t, upper_bound, &crit, delta))
             .expect("Could not minimize h1");
 
-        if g(t1, t, max_makespan) <= g(t, t1, max_makespan) {
+        if g(t1, t, upper_bound) <= g(t, t1, upper_bound) {
             vec!((t1, t), (t, t1))
         } else {
             vec!((t, t1), (t1, t))
         }
     } else {
-        let delta = t2.lct() - crit.nodes.iter()
+        let delta = t2.lct(upper_bound) - crit.nodes.iter()
             .filter(|x| x.id() != t2.id())
-            .map(|x| x.lct()).max().expect("No max S2 found");
+            .map(|x| x.lct(upper_bound)).max().expect("No max S2 found");
         let t = s2.iter()
-            .min_by_key(|t| right_bounded_entropy(t, t2, max_makespan, &crit, delta))
+            .min_by_key(|t| right_bounded_entropy(t, t2, upper_bound, &crit, delta))
             .expect("Could not minimize h2");
 
-        if g(t, t2, max_makespan) <= g(t2, t, max_makespan) {
+        if g(t, t2, upper_bound) <= g(t2, t, upper_bound) {
             vec!((t, t2), (t2, t))
         } else {
             vec!((t2, t), (t, t2))
@@ -154,10 +154,11 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, max_makespan: u32) -> V
 
 /// Find the critical on a resource, if there is no found then there inconsistency
 /// It can happen that a resource is already completely scheduled.
-fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
+fn crit<'a>(resource_id: usize, graph: &'a CGraph, upper_bound: u32) -> Option<TaskInterval<'a>> {
     
-    // Get the nodes on the resources    
-    let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph);
+    // Get the nodes on the resources
+    println!("graph: \n{}", graph);
+    let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph, upper_bound);
 
     /*println!("r{}, graph: {}", resource_id, graph);
     for ti in task_intervals.iter() {
@@ -172,12 +173,12 @@ fn crit<'a>(resource_id: usize, graph: &'a CGraph) -> Option<TaskInterval<'a>> {
 }
 
 /// Calculate the slack for all operations on a resource
-fn resource_slack(resource: u32, graph: &CGraph) -> u32 {
+fn resource_slack(resource: u32, graph: &CGraph, upper_bound: u32) -> u32 {
     let (min, max, p) = graph.nodes().iter()
         .filter(|x| x.machine_id() == Some(resource as u32))
         .fold((std::u32::MAX, 0, 0), |(min, max, p), x| {
             let min = std::cmp::min(min, x.est());
-            let max = std::cmp::max(max, x.lct());
+            let max = std::cmp::max(max, x.lct(upper_bound));
             let p = p + x.weight();
             (min, max, p)
         });
@@ -199,26 +200,26 @@ fn left_bounded_entropy(t1: &node::Node, tb: &node::Node, max_makespan: u32, tas
     std::cmp::max(t1_tb, std::cmp::min(tb_t1, fff))
 }
 
-fn right_bounded_entropy(ta: &node::Node, t2: &node::Node, max_makespan: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
-    let ta_t2 = g(ta, t2, max_makespan);
-    let t2_ta = g(t2, ta, max_makespan);
+fn right_bounded_entropy(ta: &node::Node, t2: &node::Node, upper_bound: u32, task_interval: &TaskInterval, delta: u32) -> u32 {
+    let ta_t2 = g(ta, t2, upper_bound);
+    let t2_ta = g(t2, ta, upper_bound);
 
     // If this assert fails then that means that t2 cannot be placed
-    debug_assert!(ta.lct() >= task_interval.lower() + task_interval.processing);
+    debug_assert!(ta.lct(upper_bound) >= task_interval.lower() + task_interval.processing);
 
-    let new_slack = ta.lct() - task_interval.lower() - task_interval.processing;
-    let fff = evaluation(new_slack, delta, max_makespan);
+    let new_slack = ta.lct(upper_bound) - task_interval.lower() - task_interval.processing;
+    let fff = evaluation(new_slack, delta, upper_bound);
 
     std::cmp::max(ta_t2, std::cmp::min(t2_ta, fff))
 }
 
 /// Assess impact of an ordering ta -> tb
-fn g(ta: &node::Node, tb: &node::Node, allowed_makespan: u32) -> u32 {
-    let da = ta.lct().saturating_sub(tb.lst());
+fn g(ta: &node::Node, tb: &node::Node, upper_bound: u32) -> u32 {
+    let da = ta.lct(upper_bound).saturating_sub(tb.lst(upper_bound));
     let db = (ta.est() + ta.weight()).saturating_sub(tb.est());    
 
-    let a = evaluation(ta.lct() - ta.est() - ta.weight(), da, allowed_makespan);
-    let b = evaluation(tb.lct() - tb.est() - tb.weight(), db, allowed_makespan);
+    let a = evaluation(ta.lct(upper_bound) - ta.est() - ta.weight(), da, upper_bound);
+    let b = evaluation(tb.lct(upper_bound) - tb.est() - tb.weight(), db, upper_bound);
 
     std::cmp::min(a, b)
 }
@@ -242,7 +243,7 @@ fn num_choices(task_interval: &TaskInterval) -> usize {
 /// Chapter 4.4: Lower bound
 /// Warning: Does not implement all three bounds.
 /// A study of lower bounds is acceptable
-fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {    
+fn lower_bound(graph: &CGraph, upper_bound: u32, resources: &[usize]) -> u32 {    
     let resources = resources.iter()
         .map(|resource| graph.nodes().iter().filter(move |n| n.machine_id() == Some(*resource as u32))) // Returns an I_k on machine M_k
         .collect::<Vec<_>>();
@@ -253,11 +254,11 @@ fn lower_bound(graph: &CGraph, max_makespan: u32, resources: &[usize]) -> u32 {
             let n1 = &comb[0];
             let n2 = &comb[1];
 
-            let a = n1.est() + n1.weight() + n2.weight() + (max_makespan - n2.lct());
-            let b = n2.est() + n2.weight() + n1.weight() + (max_makespan - n1.lct());
+            let a = n1.est() + n1.weight() + n2.weight() + (upper_bound - n2.lct(upper_bound));
+            let b = n2.est() + n2.weight() + n1.weight() + (upper_bound - n1.lct(upper_bound));
             std::cmp::max(a, b)
         })        
-        .filter(|d| d <= &max_makespan)
-        .max().unwrap_or(max_makespan + 1);
+        .filter(|d| d <= &upper_bound)
+        .max().unwrap_or(upper_bound + 1);
     d1 - 1
 }

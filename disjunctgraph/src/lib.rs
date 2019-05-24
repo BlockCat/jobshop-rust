@@ -28,31 +28,34 @@ pub trait GraphNode: NodeId {
 }
 
 pub trait ConstrainedNode: GraphNode {
-    fn set_est(&mut self, est: u32);
-    fn set_lst(&mut self, lst: u32);
+
+    fn head(&self) -> u32;
+    fn tail(&self) -> u32;
+    fn set_head(&mut self, head: u32);
+    fn set_tail(&mut self, tail: u32);
+
+    fn set_est(&mut self, est: u32) {
+        self.set_head(est);
+    }
     
-    fn set_lct(&mut self, lct: u32) {
-        debug_assert!(lct >= self.weight());
-        self.set_lst(lct - self.weight());
+    #[deprecated]
+    fn set_lst(&mut self, lst: u32, upper_bound: u32) {
+        self.set_lct(lst + self.weight(), upper_bound);
+    }
+    
+    #[inline]
+    #[deprecated]
+    fn set_lct(&mut self, lct: u32, upper_bound: u32) {
+        debug_assert!(self.feasible_lct(lct, upper_bound));
+        self.set_tail(upper_bound - lct);
     }
 
-    fn est(&self) -> u32;
-    fn lst(&self) -> u32;
-    fn lct(&self) -> u32 {
-        self.lst() + self.weight()
-    }
-
-    fn feasible_lct(&self, lct: u32) -> bool {
-        lct >= self.weight() && self.feasible_lst(lct - self.weight())
-    }
-
-    fn feasible_lst(&self, lst: u32) -> bool {
-        lst > self.est()
-    }
-
-    fn feasible_est(&self, est: u32) -> bool {
-        est <= self.lst()
-    }
+    #[inline] #[deprecated] fn est(&self) -> u32 { self.head() }
+    #[inline] fn lst(&self, upper_bound: u32) -> u32 { self.lct(upper_bound) - self.weight() }
+    #[inline] fn lct(&self, upper_bound: u32) -> u32 { upper_bound - self.tail() }
+    #[inline] fn feasible_lct(&self, lct: u32, upper_bound: u32) -> bool { upper_bound > lct && lct >= self.tail() + self.weight() }
+    #[inline] fn feasible_lst(&self, lst: u32, upper_bound: u32) -> bool { self.feasible_lct(lst + self.weight(), upper_bound) }
+    #[inline] fn feasible_est(&self, est: u32, upper_bound: u32) -> bool { upper_bound >= est + self.weight() + self.tail()  }
 }
 
 
@@ -126,7 +129,8 @@ impl<'a, G:Graph> Iterator for NodeIterator<'a, G> {
 pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as Graph>::Node> {
     type Node: NodeId + GraphNode;
     fn create(nodes: Vec<Self::Node>, edges: Vec<Vec<Relation>>) -> Self;
-    fn nodes(&self) -> &[Self::Node];    
+    fn nodes(&self) -> &[Self::Node];
+    fn nodes_mut(&mut self) -> &mut [Self::Node];
     fn source(&self) -> &Self::Node;
     fn sink(&self) -> &Self::Node;
     //fn successors(&self, id: &impl NodeId) -> Vec<&Self::Node>;
@@ -236,31 +240,21 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
         false
     }
 
-    fn init_weights(&mut self, max_makespan: u32) -> Result<(), ()>
+    fn init_weights(&mut self) -> Result<(), ()>
     where Self::Node: ConstrainedNode {        
-        let topology = self.topology().map(|x| x.id()).collect::<Vec<_>>();
-
-        for node in &topology {
-            let head = self.predecessors(node).into_iter().map(|x| x.est() + x.weight()).max().unwrap_or(0);
-            self[*node].set_est(head);
+        let nodes = self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>();
+        for node in &nodes {
+            let head = self.predecessors(node).into_iter().map(|x| x.weight()).sum();
+            self[*node].set_head(head);
         }
 
-        for node in topology.iter().rev() {
-            let tail = self.successors(node)
-                .map(|x| x.lct() - x.weight())
-                .min()
-                .unwrap_or(max_makespan);
-                
-            let n = &self[*node];
-            if tail - n.weight() >= n.est() {
-                self[*node].set_lct(tail);
-            } else {
-                return Err(());
-            }
+        for node in &nodes {
+            let tail = self.successors(node).map(|x| x.weight()).sum();
+            self[*node].set_tail(tail);
         }
 
         Ok(())
     }
 
-    fn search_orders(&mut self) -> bool where Self::Node: ConstrainedNode; 
+    fn search_orders(&mut self, upper_bound: u32) -> bool where Self::Node: ConstrainedNode; 
 }

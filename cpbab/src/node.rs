@@ -4,8 +4,8 @@ pub struct Node {
     job_id: Option<usize>,
     weight: u32,    
     machine_id: Option<u32>,
-    est: Option<u32>,
-    lst: Option<u32>
+    head: Option<u32>,
+    tail: Option<u32>
 }
 
 impl disjunctgraph::NodeId for Node {
@@ -16,8 +16,8 @@ impl disjunctgraph::GraphNode for Node {
     fn create(id: usize, weight: u32, machine_id: Option<u32>, job_id: Option<usize>) -> Self {
         Node {
             id, weight, job_id, machine_id,
-            est: None, 
-            lst: None
+            head: None, 
+            tail: None
         }
     }
     fn weight(&self) -> u32 { self.weight }
@@ -26,23 +26,17 @@ impl disjunctgraph::GraphNode for Node {
 }
 
 impl disjunctgraph::ConstrainedNode for Node {
-    fn set_est(&mut self, est: u32) {
-        debug_assert!(match self.lst {
-                Some(lst) => lst >= est,
-                None => true
-        });
-        self.est = Some(est);
+    fn head(&self) -> u32 {
+        self.head.expect("Head not initialized")
     }
 
-    fn set_lst(&mut self, lst: u32) {
-        self.lst = Some(lst);
+    fn tail(&self) -> u32 {
+        self.tail.expect("Tail not initialized")
     }
-    
-    fn est(&self) -> u32 {
-        self.est.expect("Could not get earliest starting time!")
+    fn set_head(&mut self, head: u32) {
+        self.head = Some(head);
     }
-
-    fn lst(&self) -> u32 {
-        self.lst.expect("Could not get latest starting time for node")
-    }    
+    fn set_tail(&mut self, tail: u32) {
+        self.tail = Some(tail);
+    }
 }

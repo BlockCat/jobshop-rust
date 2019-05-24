@@ -35,29 +35,30 @@ use disjunctgraph::{ Graph, ConstrainedNode, GraphNode, NodeId };
 use itertools::Itertools;
 use std::collections::HashSet;
 
-use crate::task_interval::TaskInterval;
 use crate::task_interval;
 
 
-pub fn propagate_lct<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
+pub fn propagate_tail<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
     use std::collections::VecDeque;
 
     let mut stack: VecDeque<(usize, u32)> = VecDeque::new();
     let mut changed: HashSet<usize> = HashSet::new();
     
-    { // sup my lct changed, so yours might too
-        let next_lct = graph[node.id()].lst();
-        stack.extend(graph.predecessors(node).map(|p| (p.id(), next_lct)));
+    { 
+        // sup my tail changed, so yours might too
+        // so yours has to be at least my tail + my weight
+        let next_tail = graph[node.id()].tail() + graph[node.id()].weight();
+        stack.extend(graph.predecessors(node).map(|p| (p.id(), next_tail)));
     }
 
-    while let Some((id, max_lct)) = stack.pop_back() {
+    while let Some((id, min_tail)) = stack.pop_back() {
         let node = &mut graph[id];
     
-        if node.lct() > max_lct {
-            if node.feasible_lct(max_lct) {
-                node.set_lct(max_lct);
-                let next_lct = node.lst();
-                stack.extend(graph.predecessors(&id).map(|p| (p.id(), next_lct)));
+        if min_tail > node.tail() {
+            if node.head() + node.weight() + min_tail <= upper_bound {
+                node.set_tail(min_tail);
+                let next_tail = min_tail + node.weight();
+                stack.extend(graph.predecessors(&id).map(|p| (p.id(), next_tail)));
                 changed.insert(id);
             } else {
                 return Err(());
@@ -69,26 +70,25 @@ pub fn propagate_lct<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<Hash
 }
 
 
-pub fn propagate_est<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
+pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
     use std::collections::VecDeque;
 
     let mut stack: VecDeque<(usize, u32)> = VecDeque::new();
     let mut changed: HashSet<usize> = HashSet::new();
     
     {
-        let next_est = graph[node.id()].est() + graph[node.id()].weight();
-        stack.extend(graph.successors(node).map(|s| (s.id(), next_est)));
+        let next_head = graph[node.id()].head() + graph[node.id()].weight();
+        stack.extend(graph.successors(node).map(|s| (s.id(), next_head)));
     }
 
-    while let Some((id, min_est)) = stack.pop_back() {
+    while let Some((id, min_head)) = stack.pop_back() {
         let node = &mut graph[id];
     
-        if node.est() < min_est {
-            if node.feasible_est(min_est) {
-                node.set_est(min_est);
-                let next_est = min_est + node.weight();
-
-                stack.extend(graph.successors(&id).map(|s| (s.id(), next_est)));
+        if min_head > node.head() {
+            if min_head + node.weight() + node.tail() <= upper_bound {
+                node.set_head(min_head);
+                let next_head = min_head + node.weight();
+                stack.extend(graph.successors(&id).map(|s| (s.id(), next_head)));
                 changed.insert(id);
             } else {
                 return Err(());
@@ -99,9 +99,9 @@ pub fn propagate_est<I: Graph>(node: &impl NodeId, graph: &mut I) -> Result<Hash
     Ok(changed)
 }
 
-pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
+pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, upper_bound: u32) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
 
-    let tis = task_interval::find_task_intervals(resource, graph);
+    let tis = task_interval::find_task_intervals(resource, graph, upper_bound);
 
     let starts: Vec<(usize, usize)> = tis.iter()
         .filter(|ti| ti.nc_start.len() == 1)
@@ -123,36 +123,34 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I) ->
                 .collect_vec()
         }).collect();
 
-
-    println!("Found: {:?}", starts);
-    println!("Found: {:?}", ends);
-
     for (other, end) in ends {
         graph.fix_disjunction(&other, &end).or(Err(())).or(Err(()))?;
-        propagate_est(&other, graph)?;
-        propagate_est(&end, graph)?;
+        propagate_head(&end, graph, upper_bound)?;
+        propagate_tail(&other, graph, upper_bound)?;
     }
     
     for (start, other) in starts {
         graph.fix_disjunction(&start, &other).or(Err(())).or(Err(()))?;
-        propagate_est(&start, graph)?;
-        propagate_est(&other, graph)?;
+        propagate_head(&other, graph, upper_bound)?;
+        propagate_tail(&start, graph, upper_bound)?;
     }
 
     Ok(())
 }
 /// Propagate a fixation node_1 -> node_2
-pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
+pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId, upper_bound: u32) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
     
-    propagate_est(node_1, graph)?;
-    propagate_lct(node_2, graph)?;
-    graph.search_orders();
+    propagate_head(node_1, graph, upper_bound)?;
+    propagate_tail(node_2, graph, upper_bound)?;
+    
+    graph.search_orders(upper_bound);
 
     let resource = graph[node_1.id()].machine_id().unwrap();
 
-    edge_finding(resource, graph)?;
-    graph.search_orders();
+    edge_finding(resource, graph, upper_bound)?;
+    graph.search_orders(upper_bound);
     
+
     Ok(())
 }
 
@@ -162,60 +160,3 @@ pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &im
 // then interval maintenance
 // these two are interleaved, maintenance triggers propagation
 // and propagation triggers maintenance
-
-// They say for maintenance:
-// 1. Do actions that do not have to be propagated (negative shit)
-// 2.
-
-struct PropagatedTaskInterval {
-    lower: usize,
-    upper: usize,
-    processing: u32,
-    nodes: Vec<usize>
-}
-
-fn propagate_node<'a, T: Graph>(node: &impl NodeId, graph: &mut T) where T::Node: ConstrainedNode + std::fmt::Debug {    
-    // Need to be maintained
-    let interval_to_ref = |x: TaskInterval<T>| -> PropagatedTaskInterval {
-        PropagatedTaskInterval { 
-            lower: x.lower.id(), 
-            upper: x.upper.id(), 
-            processing: x.processing, 
-            nodes: x.nodes.iter().map(|n| n.id()).collect_vec()
-        }
-    };
-    let mut task_intervals: Vec<PropagatedTaskInterval> = 
-        task_interval::find_task_intervals(graph[node.id()].machine_id().unwrap(), graph)
-        .into_iter()
-        .map(interval_to_ref)
-        .collect_vec();
-    
-    task_maintenance(node, 100, &mut task_intervals, graph);
-}
-
-fn task_maintenance<T: Graph>(node: &impl NodeId, new_lower: u32, task_intervals: &mut Vec<PropagatedTaskInterval>, graph: &mut T) where T::Node: ConstrainedNode {
-    let old_lower = graph[node.id()].est();
-    
-    debug_assert!(new_lower > old_lower);
-
-    task_intervals.drain_filter(|ti| {
-        if graph[ti.lower].est() < old_lower {
-            return false;
-        }
-        if old_lower < graph[ti.upper].est() && graph[ti.upper].est() <= new_lower && ti.upper != ti.lower {
-            return true;
-        }
-
-        unimplemented!("Reducing task intervals needs to be implemented");
-
-    });
-    for x in task_intervals.iter_mut() {
-        x.nodes = vec!();
-    }
-
-    graph[node.id()].set_est(new_lower);
-
-    // All taskintervals that start between old_lower and new_lower
-    
-}
-

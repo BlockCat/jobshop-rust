@@ -51,6 +51,10 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
 		&self.nodes
 	}
 
+    fn nodes_mut(&mut self) -> &mut [T] {
+        &mut self.nodes
+    }
+
 	fn source(&self) -> &T {
 		&self.nodes().first().unwrap()
 	}
@@ -156,24 +160,23 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
         !self.disjunctions[node.id()].is_empty()
     }
 
-    fn search_orders(&mut self) -> bool where Self::Node: ConstrainedNode {
+    fn search_orders(&mut self, upper_bound: u32) -> bool where Self::Node: ConstrainedNode {
         
         let mut change_occured = false;
         for node in self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
             for other in self.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
-                
-                    let node_ect = self[node].est() + self[node].weight();
-                    let node_est = self[node].est();
 
-                    let other_lst = self[other].lst();
-
+                    let head = self[node].head();
+                    let processing = self[node].weight() + self[other].weight();
+                    
+                    let tail = self[other].tail();
+                    
                     // Check if node -> other is not possible 
                     // node: 1 -> other: 3
                     // node_ect: 2
                     // other_lst: 6
-
-
-                    if node_ect > other_lst || other_lst < node_est {
+                    // If node -> other is bigger than the upper bound
+                    if head + processing + tail > upper_bound {
                         change_occured = true;
                         // other -> node it is then
                         let node_1 = other;
@@ -184,9 +187,8 @@ impl<T: NodeId + GraphNode + Clone> Graph for LinkedGraph<T> {
                         
                         // Node_1 -> Node_2
                         self.successors[node_1].insert(node_2);
-                        self.predecessors[node_2].insert(node_1);     
+                        self.predecessors[node_2].insert(node_1);
                     }
-                
             }
         }
 
