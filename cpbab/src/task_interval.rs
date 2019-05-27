@@ -39,9 +39,9 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
 
     pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &'b T::Node, upper: &'b T::Node, upper_bound: u32) -> Option<TaskInterval<'b, T>> {
 
-        // Task intervals should contain operations that have no disjunctions left        
+        // Task intervals should contain operations that have no disjunctions left
         let nodes: Vec<&T::Node> = resource.iter()
-            .filter(|node| node.tail() >= lower.tail() && node.tail() >= upper.tail())
+            .filter(|node| node.head() >= lower.head() && node.tail() >= upper.tail())
             .cloned().collect();
 
         // TaskIntervals must have by definition 2 or more nodes.
@@ -109,8 +109,8 @@ pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32)
     for i in 0..ests.len() {
         let lower = ests[i];
 
-        // Find first j that has a upper_bound - tail(j) > head(i)
-        while upper_bound <= lower.head() + lcts[j].tail() {        
+        // Find first j that has a upper_bound - tail(j) > head(i)        
+        while j < lcts.len() && upper_bound <= lower.head() + lcts[j].tail() {        
             j += 1;
         }
 

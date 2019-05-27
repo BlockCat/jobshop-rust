@@ -18,6 +18,6 @@ impl ProblemSolver for CPBAB {
             .critical_length().unwrap();*/
         let graph = problem.into_graph();
         
-        cpbab::branch_and_bound(graph, problem.machines as usize, 690)
+        cpbab::branch_and_bound(graph, problem.machines as usize, 650)
     }
 }

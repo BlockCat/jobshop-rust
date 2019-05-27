@@ -124,32 +124,58 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
         }).collect();
 
     for (other, end) in ends {
-        graph.fix_disjunction(&other, &end).or(Err(())).or(Err(()))?;
+        graph.fix_disjunction(&other, &end).or(Err(()))?;
+        
+        /*let new_tail = graph[other].tail() + graph[other].weight();
+        let new_head = graph[end].head() + graph[end].weight();
+
+        graph[other].set_tail(new_tail);
+        graph[end].set_head(new_head);
+
         propagate_head(&end, graph, upper_bound)?;
-        propagate_tail(&other, graph, upper_bound)?;
+        propagate_tail(&other, graph, upper_bound)?;*/
     }
     
     for (start, other) in starts {
-        graph.fix_disjunction(&start, &other).or(Err(())).or(Err(()))?;
+        graph.fix_disjunction(&start, &other).or(Err(()))?;
+
+        /*let new_tail = graph[start].tail() + graph[start].weight();
+        let new_head = graph[other].head() + graph[other].weight();
+
+        graph[start].set_tail(new_tail);
+        graph[other].set_head(new_head);
+
         propagate_head(&other, graph, upper_bound)?;
-        propagate_tail(&start, graph, upper_bound)?;
+        propagate_tail(&start, graph, upper_bound)?;*/
     }
+
 
     Ok(())
 }
 /// Propagate a fixation node_1 -> node_2
 pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId, upper_bound: u32) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
+    /*let new_tail = graph[node_1.id()].tail() + graph[node_2.id()].weight();
+    let new_head = graph[node_2.id()].head() + graph[node_1.id()].weight();
     
-    propagate_head(node_1, graph, upper_bound)?;
-    propagate_tail(node_2, graph, upper_bound)?;
-    
-    graph.search_orders(upper_bound);
+    graph[node_1.id()].set_tail(new_tail);
+    graph[node_2.id()].set_head(new_head);
 
-    let resource = graph[node_1.id()].machine_id().unwrap();
+    propagate_head(node_2, graph, upper_bound)?;
+    propagate_tail(node_1, graph, upper_bound)?;*/
 
-    edge_finding(resource, graph, upper_bound)?;
-    graph.search_orders(upper_bound);
+    graph.init_weights();    
+//    graph.search_orders(upper_bound);
+  //  graph.init_weights()?;
+
+    //let resource = graph[node_1.id()].machine_id().unwrap();
+
+    //compile_error!("Iḿ going to guess that this kind of propagation is too dependent on the upper_bound, hence it will be wrong")
+    //edge_finding(resource, graph, upper_bound)?;
+    //graph.init_weights()?;
+    //graph.search_orders(upper_bound);
     
+
+    //graph.init_weights()?;
 
     Ok(())
 }

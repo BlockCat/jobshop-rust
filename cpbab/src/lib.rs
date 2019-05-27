@@ -23,11 +23,13 @@ const PAR: u32 = 3;
 // Operations that have no disjunctions left are looked at too.
 // I believe cycles can occur? ()
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
-    root.init_weights().expect("Problem with makespan is not feasible");    
+    root.init_weights();//.expect("Problem with makespan is not feasible");    
     root.search_orders(max_makespan);
     for resource in 1..=resources {
         crate::propagation::edge_finding(resource as u32, &mut root, max_makespan).unwrap();
     }
+    root.init_weights();
+    
     
     let mut upper_bound = max_makespan;
     let mut current_best = root.clone();
@@ -47,16 +49,18 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             let length = dbg!(node.critical_length().expect("Could not calculate critical length"));
             if length <= upper_bound {
                 upper_bound = length;
-                current_best = node;                
+                current_best = node;
             }
+            println!("We got one of length");
         } else {
             if node.nodes().iter().any(|n| upper_bound < n.head() + n.weight() + n.tail()) {
                 continue;
             }
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
+                debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
                 let mut graph = node.clone();
                 graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                
+                //println!("g: {}", graph);
                 if propagation::propagate_fixation(&mut graph, t1, t2, upper_bound).is_ok() {                    
                     if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
                         stack.push_front(graph);
@@ -157,13 +161,8 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
 fn crit<'a>(resource_id: usize, graph: &'a CGraph, upper_bound: u32) -> Option<TaskInterval<'a>> {
     
     // Get the nodes on the resources
-    println!("graph: \n{}", graph);
+    
     let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph, upper_bound);
-
-    /*println!("r{}, graph: {}", resource_id, graph);
-    for ti in task_intervals.iter() {
-        println!("ti: {}", ti);
-    }*/
     
     debug_assert!(task_intervals.len() > 0);
 
@@ -216,10 +215,10 @@ fn right_bounded_entropy(ta: &node::Node, t2: &node::Node, upper_bound: u32, tas
 /// Assess impact of an ordering ta -> tb
 fn g(ta: &node::Node, tb: &node::Node, upper_bound: u32) -> u32 {
     let da = ta.lct(upper_bound).saturating_sub(tb.lst(upper_bound));
-    let db = (ta.est() + ta.weight()).saturating_sub(tb.est());    
+    let db = (ta.head() + ta.weight()).saturating_sub(tb.head());    
 
-    let a = evaluation(ta.lct(upper_bound) - ta.est() - ta.weight(), da, upper_bound);
-    let b = evaluation(tb.lct(upper_bound) - tb.est() - tb.weight(), db, upper_bound);
+    let a = evaluation(upper_bound - ta.tail() - ta.head() - ta.weight(), da, upper_bound);
+    let b = evaluation(upper_bound - tb.tail() - tb.head() - tb.weight(), db, upper_bound);
 
     std::cmp::min(a, b)
 }
@@ -254,8 +253,8 @@ fn lower_bound(graph: &CGraph, upper_bound: u32, resources: &[usize]) -> u32 {
             let n1 = &comb[0];
             let n2 = &comb[1];
 
-            let a = n1.est() + n1.weight() + n2.weight() + (upper_bound - n2.lct(upper_bound));
-            let b = n2.est() + n2.weight() + n1.weight() + (upper_bound - n1.lct(upper_bound));
+            let a = n1.head() + n1.weight() + n2.weight() + n2.tail();
+            let b = n2.head() + n2.weight() + n1.weight() + n2.tail();
             std::cmp::max(a, b)
         })        
         .filter(|d| d <= &upper_bound)

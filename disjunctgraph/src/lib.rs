@@ -240,7 +240,7 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
         false
     }
 
-    fn init_weights(&mut self) -> Result<(), ()>
+    fn init_weights(&mut self)
     where Self::Node: ConstrainedNode {        
         let nodes = self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>();
         for node in &nodes {
@@ -252,8 +252,6 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
             let tail = self.successors(node).map(|x| x.weight()).sum();
             self[*node].set_tail(tail);
         }
-
-        Ok(())
     }
 
     fn search_orders(&mut self, upper_bound: u32) -> bool where Self::Node: ConstrainedNode; 
