@@ -1,5 +1,6 @@
 mod linked_graph;
 
+use itertools::Itertools;
 use std::collections::VecDeque;
 
 pub use linked_graph::LinkedGraph;
@@ -64,57 +65,6 @@ pub enum Relation {
     Successor(usize), Predecessor(usize), Disjunctive(usize)
 }
 
-const TOPOLOGY_PROCESSED: u8 = 1;
-const TOPOLOGY_IN_STACK: u8 = 2;
-enum Status { Visisted(usize), Unvisited(usize) }
-
-pub struct TopologyIterator<'a, G: Graph> {
-    graph: &'a G,
-    node_state: Vec<u8>, // processed, in_stack as bitflags
-    stack: VecDeque<Status>
-}
-
-impl<'a, G: Graph> Iterator for TopologyIterator<'a, G> {
-    type Item = &'a G::Node;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop { // Loop till it exits
-
-            // Pop node from stack
-            let current_node = match self.stack.pop_back() {
-                Some(node) => node,
-                _ => return None, // If no node in the stack, then topology exits
-            };
-
-            match current_node {
-                // If the node is unvisited expand it.
-                Status::Unvisited(current_node) => {
-                    if self.node_state[current_node] == 0 { // It's not in stack and not processed
-
-                        // All predecessors that are not yet processed, and not waiting to be processed
-                        let predecessors = self.graph.predecessors(&current_node) 
-                            .into_iter()
-                            .filter(|x| self.node_state[x.id()] == 0)
-                            .collect::<Vec<_>>();
-                        
-                        self.stack.reserve(predecessors.len() + 1);
-                        self.stack.push_back(Status::Visisted(current_node));                        
-                        self.stack.extend(predecessors.iter().map(|x| Status::Unvisited(x.id())));                        
-                        self.node_state[current_node] |= TOPOLOGY_IN_STACK; // It's now in stack
-                    }
-                },
-                // If the node is visited and not yet processed, return it.
-                Status::Visisted(current_node) => {
-                    if (self.node_state[current_node] & TOPOLOGY_PROCESSED) == 0 {
-                        // Set node to be not in stack but yes processed
-                        self.node_state[current_node] = TOPOLOGY_PROCESSED;                        
-                        return Some(&self.graph[current_node]);                        
-                    }
-                }
-            }
-        }
-    }
-}
 
 pub struct NodeIterator<'a, G: Graph>(Box<dyn Iterator<Item = &'a G::Node> + 'a>);
 
@@ -158,6 +108,17 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
         stack.push_back(Status::Unvisited(self.sink().id()));
 
         TopologyIterator {
+            graph: self,
+            node_state: vec!(0u8; self.nodes().len()),            
+            stack: stack
+        }
+    }
+
+    fn topology_reverse<'a>(&'a self) -> ReverseTopologyIterator<'a, Self> {
+        let mut stack = VecDeque::with_capacity(self.nodes().len());
+        stack.push_back(Status::Unvisited(self.source().id()));
+
+        ReverseTopologyIterator {
             graph: self,
             node_state: vec!(0u8; self.nodes().len()),            
             stack: stack
@@ -241,18 +202,131 @@ pub trait Graph where Self: Sized + std::ops::IndexMut<usize, Output = <Self as 
     }
 
     fn init_weights(&mut self)
-    where Self::Node: ConstrainedNode {        
-        let nodes = self.nodes().iter().map(|n| n.id()).collect::<Vec<_>>();
-        for node in &nodes {
-            let head = self.predecessors(node).into_iter().map(|x| x.weight()).sum();
-            self[*node].set_head(head);
+    where Self::Node: ConstrainedNode {
+        for node in self.topology().map(|n| n.id()).collect_vec() {
+            let head = self.predecessors(&node).map(|x| x.head() + x.weight()).max().unwrap_or(0);
+            self[node].set_head(head);
         }
 
-        for node in &nodes {
-            let tail = self.successors(node).map(|x| x.weight()).sum();
-            self[*node].set_tail(tail);
+        for node in self.topology_reverse().map(|n| n.id()).collect_vec() {
+            let tail = self.successors(&node).map(|x| x.tail() + x.weight()).max().unwrap_or(0);
+            self[node].set_tail(tail);
         }
+
+        debug_assert!(self.nodes().iter().all(|node|{
+                let current_head = node.head();
+                let head = self.predecessors(node).map(|o| o.head() + o.weight()).max().unwrap_or(0);
+
+                assert!(current_head >= head, "wrong head propagation: {} >= {}", current_head, head);
+                current_head >= head
+        }));
+
+        debug_assert!(self.nodes().iter().all(|node|{                
+                let current_tail = node.tail();                
+                let tail = self.successors(node).map(|o| o.tail() + o.weight()).max().unwrap_or(0);
+
+                assert!(current_tail >= tail, "wrong tail propagation: {} >= {}", current_tail, tail);
+                current_tail >= tail
+        }));
     }
 
-    fn search_orders(&mut self, upper_bound: u32) -> bool where Self::Node: ConstrainedNode; 
+}
+
+
+const TOPOLOGY_PROCESSED: u8 = 1;
+const TOPOLOGY_IN_STACK: u8 = 2;
+enum Status { Visisted(usize), Unvisited(usize) }
+
+pub struct TopologyIterator<'a, G: Graph> {
+    graph: &'a G,
+    node_state: Vec<u8>, // processed, in_stack as bitflags
+    stack: VecDeque<Status>
+}
+
+pub struct ReverseTopologyIterator<'a, G: Graph> {
+    graph: &'a G,
+    node_state: Vec<u8>, // processed, in_stack as bitflags
+    stack: VecDeque<Status>
+}
+
+impl<'a, G: Graph> Iterator for TopologyIterator<'a, G> {
+    type Item = &'a G::Node;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop { // Loop till it exits
+
+            // Pop node from stack
+            let current_node = match self.stack.pop_back() {
+                Some(node) => node,
+                _ => return None, // If no node in the stack, then topology exits
+            };
+
+            match current_node {
+                // If the node is unvisited expand it.
+                Status::Unvisited(current_node) => {
+                    if self.node_state[current_node] == 0 { // It's not in stack and not processed
+
+                        // All predecessors that are not yet processed, and not waiting to be processed
+                        let predecessors = self.graph.predecessors(&current_node)                            
+                            .filter(|x| self.node_state[x.id()] == 0)
+                            .collect::<Vec<_>>();
+                        
+                        self.stack.reserve(predecessors.len() + 1);
+                        self.stack.push_back(Status::Visisted(current_node));                        
+                        self.stack.extend(predecessors.iter().map(|x| Status::Unvisited(x.id())));                        
+                        self.node_state[current_node] |= TOPOLOGY_IN_STACK; // It's now in stack
+                    }
+                },
+                // If the node is visited and not yet processed, return it.
+                Status::Visisted(current_node) => {
+                    if (self.node_state[current_node] & TOPOLOGY_PROCESSED) == 0 {
+                        // Set node to be not in stack but yes processed
+                        self.node_state[current_node] = TOPOLOGY_PROCESSED;                        
+                        return Some(&self.graph[current_node]);                        
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<'a, G: Graph> Iterator for ReverseTopologyIterator<'a, G> {
+    type Item = &'a G::Node;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop { // Loop till it exits
+
+            // Pop node from stack
+            let current_node = match self.stack.pop_back() {
+                Some(node) => node,
+                _ => return None, // If no node in the stack, then topology exits
+            };
+
+            match current_node {
+                // If the node is unvisited expand it.
+                Status::Unvisited(current_node) => {
+                    if self.node_state[current_node] == 0 { // It's not in stack and not processed
+
+                        // All predecessors that are not yet processed, and not waiting to be processed
+                        let successors = self.graph.successors(&current_node)                            
+                            .filter(|x| self.node_state[x.id()] == 0)
+                            .collect::<Vec<_>>();
+                        
+                        self.stack.reserve(successors.len() + 1);
+                        self.stack.push_back(Status::Visisted(current_node));                        
+                        self.stack.extend(successors.iter().map(|x| Status::Unvisited(x.id())));                        
+                        self.node_state[current_node] |= TOPOLOGY_IN_STACK; // It's now in stack
+                    }
+                },
+                // If the node is visited and not yet processed, return it.
+                Status::Visisted(current_node) => {
+                    if (self.node_state[current_node] & TOPOLOGY_PROCESSED) == 0 {
+                        // Set node to be not in stack but yes processed
+                        self.node_state[current_node] = TOPOLOGY_PROCESSED;                        
+                        return Some(&self.graph[current_node]);                        
+                    }
+                }
+            }
+        }
+    }
 }

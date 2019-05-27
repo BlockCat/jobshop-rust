@@ -11,3 +11,4 @@ labeller = ["dot"]
 [dependencies]
 dot = { version = "0.1.4", optional = true }
 hashbrown = "0.3.0"
+itertools = "0.8.0"

@@ -1,7 +1,6 @@
 use itertools::Itertools;
 use disjunctgraph::{ ConstrainedNode, Graph, GraphNode, NodeId };
 
-#[derive(Debug)]
 pub struct TaskInterval<'a, T: Graph> where T::Node: ConstrainedNode + std::fmt::Debug {
     upper_bound: u32,
     pub upper: &'a T::Node,
@@ -12,7 +11,7 @@ pub struct TaskInterval<'a, T: Graph> where T::Node: ConstrainedNode + std::fmt:
     pub nodes: Vec<&'a T::Node>,
 }
 
-impl<'a, T: Graph> std::fmt::Display for TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug {
+impl<'a, T: Graph> std::fmt::Debug for TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug, T: std::fmt::Debug {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(l: {}, u:{} -> start: {:?}, end: {:?}, nodes: {:?})", 
             self.lower(), 
@@ -23,7 +22,7 @@ impl<'a, T: Graph> std::fmt::Display for TaskInterval<'a, T> where T::Node: Cons
     }
 }
 
-impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug {
+impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt::Debug, T: std::fmt::Debug {
     
     pub fn slack(&self) -> u32 {
         self.upper() - self.lower() - self.processing
@@ -51,7 +50,6 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
 
         let processing = nodes.iter().map(|x| x.weight()).sum();
 
-        
         // NC start is the set of jobs that can be executed before all jobs in S. This is the edge finding part in the paper:
         // If t was the first in the interval, is there enough space to execute the other nodes?
         // if it has any "node -> other" then node can't be first 
@@ -63,6 +61,17 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
             .filter(|node| !nodes.iter().any(|other| graph.has_precedence(*other, **node)))
             .map(|x| *x)
             .collect::<Vec<_>>();
+
+        // if nc_start.len() == 0 {
+        //     return None;
+        // }
+
+        debug_assert!(nc_start.len() >= 1, "An interval can always have a first node:\n{:?}\nstart nodes 1: \n{:?}\nnodes: {:?}\nub: {}", 
+        graph, 
+        nodes.iter().filter(|n| upper_bound >= n.head() + processing + upper.tail()).map(|n| n.id()).collect_vec(), 
+        nodes.iter().map(|n| n.id()).collect_vec(),
+        upper_bound);
+       
         
         // NC end is the set of jobs that can be executed after all jobs in S.        
         // If t was the last interval, is there enough space to execute the other nodes?
@@ -70,10 +79,18 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         // all nodes where head(S) + d(S) + tail(n) fits in the upper_bound
         
         let nc_end = nodes.iter()
-            .filter(|node| upper_bound >= lower.head() + processing + node.tail())
-            .filter(|node| !nodes.iter().any(|other| graph.has_precedence(**node, *other))) 
+            .filter(|node| upper_bound >= lower.head() + processing + node.tail())            
+            .filter(|node| !nodes.iter().any(|other| graph.has_precedence(**node, *other)))            
             .map(|x| *x)
             .collect::<Vec<_>>();
+
+        // if nc_end.len() == 0 {
+        //     return None;
+        // }
+
+
+        debug_assert!(nc_end.len() >= 1, "An interval can always have a last node: \n{:?}\nend nodes: {:?}\nub: {}", 
+        graph, nodes.iter().filter(|n: &&&T::Node| upper_bound >= n.tail() + processing + lower.head()).map(|n| n.id()).collect_vec(), upper_bound);
 
         let ti = TaskInterval {
             upper_bound, upper, lower,
@@ -83,10 +100,9 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
 
         if !ti.feasible() {
             return None;
-        }
-
-        debug_assert!(ti.nc_start.len() >= 1, "An interval can always have a first node:\n{}", ti);
-        debug_assert!(ti.nc_end.len() >= 1, "An interval can always have a last node: \n{}", ti);
+        }       
+        
+        
         debug_assert!(ti.nc_start.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])), 
             "All nodes within nc_start should have disjunctions between each other, {}", ti.nc_start.len());
        
@@ -97,7 +113,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
     }
 }
 
-pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32) -> Vec<TaskInterval<T>> where T::Node: ConstrainedNode + std::fmt::Debug {
+pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32) -> Vec<TaskInterval<T>> where T::Node: ConstrainedNode + std::fmt::Debug, T: std::fmt::Debug {
     
     let operations = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource)).collect_vec();
     let ests: Vec<&T::Node> = operations.iter().unique_by(|s| s.head()).sorted_by_key(|s| s.head()).cloned().collect_vec();

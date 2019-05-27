@@ -24,23 +24,28 @@ const PAR: u32 = 3;
 // I believe cycles can occur? ()
 pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -> CGraph {
     root.init_weights();//.expect("Problem with makespan is not feasible");    
-    root.search_orders(max_makespan);
-    for resource in 1..=resources {
-        crate::propagation::edge_finding(resource as u32, &mut root, max_makespan).unwrap();
+    dbg!(crate::propagation::search_orders(&mut root, max_makespan).unwrap());
+
+    let resources = (1..=resources).collect::<Vec<_>>();
+    for resource in &resources {
+        crate::propagation::edge_finding(*resource as u32, &mut root, max_makespan).unwrap();
     }
+    //root.init_weights();
+    //root.search_orders(max_makespan);
     root.init_weights();
     
-    
+    //println!("{:?}", root);
     let mut upper_bound = max_makespan;
     let mut current_best = root.clone();
 
     let mut stack: VecDeque<CGraph> = VecDeque::new();
     stack.push_front(root);
 
-    let resources = (1..=resources).collect::<Vec<_>>();
-
+    
+    let mut node_evaluations = 0;
     while !stack.is_empty() {
         let node = stack.pop_front().unwrap();        
+        node_evaluations += 1;
 
         // Check if graph has disjunctions left.
         if !node.has_disjunctions() {
@@ -51,9 +56,9 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                 upper_bound = length;
                 current_best = node;
             }
-            println!("We got one of length");
+            println!("We got one of length: {}", length);
         } else {
-            if node.nodes().iter().any(|n| upper_bound < n.head() + n.weight() + n.tail()) {
+            if dbg!(lower_bound(&node, upper_bound, &resources)) > upper_bound {
                 continue;
             }
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
@@ -62,14 +67,14 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                 graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
                 //println!("g: {}", graph);
                 if propagation::propagate_fixation(&mut graph, t1, t2, upper_bound).is_ok() {                    
-                    if dbg!(lower_bound(&graph, max_makespan, &resources)) <= upper_bound {
+                    if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
                         stack.push_front(graph);
                     }
                 }
             }
         }
     }
-
+    println!("Node evaluations: {}", node_evaluations);
     current_best
 }
 
@@ -97,21 +102,22 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
         })
         .expect("Can't find critical");
     
-    debug_assert!(!crit.nodes.iter().all(|x| !graph.node_has_disjunction(*x)));
+    // not(Every node in the critical task interval has no disjunction)
+    // nodes should have at least two node that have a disjunction
 
-    let t1 = crit.nodes.iter().min_by_key(|x| x.est()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
-    let t2 = crit.nodes.iter().max_by_key(|x| x.lct(upper_bound)).expect("Could not extract right bound node"); // Get right bounded node on the task interval
+    let t1 = crit.nodes.iter().min_by_key(|x| x.head()).expect("Could not extract left bound node"); // Get left bounded node on the task interval
+    let t2 = crit.nodes.iter().min_by_key(|x| x.tail()).expect("Could not extract right bound node"); // Get right bounded node on the task interval
     
     let resource_nodes = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource_id as u32)).collect_vec();
     let crit_slack = crit.slack();
 
     let can_be_first = |t: &&&node::Node| -> bool {
-        t.est() <= t1.est() + crit_slack 
+        t.head() <= t1.head() + crit_slack 
         && t.id() != t1.id()
         && graph.has_disjunction(&t1.id(), &t.id())        
     };
     let can_be_last = |t: &&&node::Node| -> bool {
-        t.lct(upper_bound) + crit_slack >= t2.lct(upper_bound)
+        t.tail() <= t2.tail() + crit_slack        
         && t.id() != t2.id()
         && graph.has_disjunction(&t.id(), &t2.id())        
     };
@@ -123,12 +129,16 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
         .filter(can_be_last)
         .collect_vec();
 
+    // infeasible, no pairs found.
+    if dbg!(s1.len() == 0 && s2.len() == 0) {
+        return vec!();
+    }
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
     if (s1.len() <= s2.len() && s1.len() > 0) || s2.len() == 0 {
         let delta = crit.nodes.iter()
             .filter(|x| x.id() != t1.id())
-            .map(|x| x.est()).min().expect("No min S1 found") - t1.est();
+            .map(|x| x.head()).min().expect("No min S1 found") - t1.head();
 
         let t = s1.iter()
             .min_by_key(|t| left_bounded_entropy(t1, t, upper_bound, &crit, delta))
@@ -259,5 +269,7 @@ fn lower_bound(graph: &CGraph, upper_bound: u32, resources: &[usize]) -> u32 {
         })        
         .filter(|d| d <= &upper_bound)
         .max().unwrap_or(upper_bound + 1);
-    d1 - 1
+
+    let d2 = graph.nodes().iter().map(|n| n.head() + n.weight() + n.tail()).max().unwrap();
+    std::cmp::max(d1 - 1, d2)
 }

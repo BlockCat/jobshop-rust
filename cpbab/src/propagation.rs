@@ -38,7 +38,7 @@ use std::collections::HashSet;
 use crate::task_interval;
 
 
-pub fn propagate_tail<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
+pub fn propagate_tail<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, String> where I::Node: ConstrainedNode {
     use std::collections::VecDeque;
 
     let mut stack: VecDeque<(usize, u32)> = VecDeque::new();
@@ -61,7 +61,7 @@ pub fn propagate_tail<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
                 stack.extend(graph.predecessors(&id).map(|p| (p.id(), next_tail)));
                 changed.insert(id);
             } else {
-                return Err(());
+                return Err(format!("Adjusting tail of {} to {} would lead to infeasability", id, min_tail));
             }
         }
     }
@@ -70,7 +70,7 @@ pub fn propagate_tail<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
 }
 
 
-pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, ()> where I::Node: ConstrainedNode {
+pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: u32) -> Result<HashSet<usize>, String> where I::Node: ConstrainedNode {
     use std::collections::VecDeque;
 
     let mut stack: VecDeque<(usize, u32)> = VecDeque::new();
@@ -91,7 +91,7 @@ pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
                 stack.extend(graph.successors(&id).map(|s| (s.id(), next_head)));
                 changed.insert(id);
             } else {
-                return Err(());
+                return Err(format!("Adjusting head of {} to {} would lead to infeasability", id, min_head));
             }
         }
     }
@@ -99,7 +99,7 @@ pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
     Ok(changed)
 }
 
-pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, upper_bound: u32) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
+pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, upper_bound: u32) -> Result<(), String> where I::Node: ConstrainedNode + std::fmt::Debug {
 
     let tis = task_interval::find_task_intervals(resource, graph, upper_bound);
 
@@ -124,60 +124,107 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
         }).collect();
 
     for (other, end) in ends {
-        graph.fix_disjunction(&other, &end).or(Err(()))?;
-        
-        /*let new_tail = graph[other].tail() + graph[other].weight();
-        let new_head = graph[end].head() + graph[end].weight();
-
-        graph[other].set_tail(new_tail);
-        graph[end].set_head(new_head);
-
-        propagate_head(&end, graph, upper_bound)?;
-        propagate_tail(&other, graph, upper_bound)?;*/
+        graph.fix_disjunction(&other, &end).or(Err(format!("Could not fix disjunction {} -> {}", other, end)))?;
+        adjust_head_tail(graph, &other, &end, upper_bound)?;
     }
     
     for (start, other) in starts {
-        graph.fix_disjunction(&start, &other).or(Err(()))?;
-
-        /*let new_tail = graph[start].tail() + graph[start].weight();
-        let new_head = graph[other].head() + graph[other].weight();
-
-        graph[start].set_tail(new_tail);
-        graph[other].set_head(new_head);
-
-        propagate_head(&other, graph, upper_bound)?;
-        propagate_tail(&start, graph, upper_bound)?;*/
+        graph.fix_disjunction(&start, &other).or(Err(())).or(Err(format!("Could not fix disjunction {} -> {}", start, other)))?;
+        adjust_head_tail(graph, &start, &other, upper_bound)?;
     }
 
 
     Ok(())
 }
-/// Propagate a fixation node_1 -> node_2
-pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId, upper_bound: u32) -> Result<(), ()> where I::Node: ConstrainedNode + std::fmt::Debug {
-    /*let new_tail = graph[node_1.id()].tail() + graph[node_2.id()].weight();
-    let new_head = graph[node_2.id()].head() + graph[node_1.id()].weight();
-    
-    graph[node_1.id()].set_tail(new_tail);
-    graph[node_2.id()].set_head(new_head);
 
-    propagate_head(node_2, graph, upper_bound)?;
-    propagate_tail(node_1, graph, upper_bound)?;*/
+fn adjust_head_tail<I: Graph>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId, upper_bound: u32) -> Result<(), String> where I::Node: ConstrainedNode {
+    let node_1 = node_1.id();
+    let node_2 = node_2.id();
+    let old_tail = graph[node_1].tail();
+    let old_head = graph[node_2].head();
+    let new_tail = std::cmp::max(graph[node_2].tail() + graph[node_2].weight(), old_tail + graph[node_2].weight());
+    let new_head = std::cmp::max(graph[node_1].head() + graph[node_1].weight(), old_head + graph[node_1].weight());
 
-    graph.init_weights();    
-//    graph.search_orders(upper_bound);
-  //  graph.init_weights()?;
+    if new_tail > old_tail {
+        graph[node_1].set_tail(new_tail);
+        propagate_tail(&node_1, graph, upper_bound)?;
+        debug_assert!(graph.successors(&node_1).all(|o| o.tail() + o.weight() <= new_tail));
+        debug_assert!(graph.predecessors(&node_1).all(|o| o.tail() + graph[node_1].weight() >= new_tail));
+    }
 
-    //let resource = graph[node_1.id()].machine_id().unwrap();
-
-    //compile_error!("Iḿ going to guess that this kind of propagation is too dependent on the upper_bound, hence it will be wrong")
-    //edge_finding(resource, graph, upper_bound)?;
-    //graph.init_weights()?;
-    //graph.search_orders(upper_bound);
-    
-
-    //graph.init_weights()?;
+    if new_head > old_head {
+        graph[node_2].set_head(new_head);
+        propagate_head(&node_2, graph, upper_bound)?;
+        debug_assert!(graph.predecessors(&node_2).all(|o| o.head() + o.weight() <= new_head));
+        debug_assert!(graph.successors(&node_2).all(|o| o.head() + graph[node_2].weight() >= new_head));
+    }
 
     Ok(())
+}
+/// Propagate a fixation node_1 -> node_2
+pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &impl NodeId, node_2: &impl NodeId, upper_bound: u32) -> Result<(), String> where I::Node: ConstrainedNode + std::fmt::Debug {
+    
+    adjust_head_tail(graph, node_1, node_2, upper_bound)?;
+
+    /*if search_orders(graph, upper_bound)? {
+        for resource in 1..=5 {
+            edge_finding(resource, graph, upper_bound)?;            
+        }
+    }*/
+
+    debug_assert!(graph.nodes().iter().all(|node|{
+            let current_head = node.head();
+            let current_tail = node.tail();                
+            let head = graph.predecessors(node).map(|o| o.head() + o.weight()).max().unwrap_or(0);
+            let tail = graph.successors(node).map(|o| o.tail() + o.weight()).max().unwrap_or(0);
+
+            assert!(node.head() + node.weight() + node.tail() <= upper_bound);
+            assert!(current_head >= head, "wrong head propagation: {} >= {}", current_head, head);
+            assert!(current_tail >= tail, "wrong tail propagation: {} >= {}", current_tail, tail);
+            true
+    }));
+
+    Ok(())
+}
+
+
+pub fn search_orders<T: Graph> (graph: &mut T, upper_bound: u32) -> Result<bool, String> where T::Node: ConstrainedNode {
+    
+    let mut change_occured = false;
+    for node in graph.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
+        for other in graph.disjunctions(&node).map(|n| n.id()).collect::<Vec<_>>() {
+
+            let processing = graph[node].weight() + graph[other].weight();
+            let node_other = graph[node].head() + processing + graph[other].tail();
+            let other_node = graph[other].head() + processing + graph[node].tail();
+            
+            // If node -> other is bigger than the upper bound
+            if node_other > upper_bound && other_node > upper_bound {
+                println!("yep: {} > {} and {} > {}", node_other, upper_bound, other_node, upper_bound);
+                return Err(format!("yep: {} > {} and {} > {}", node_other, upper_bound, other_node, upper_bound));
+            }
+            debug_assert!(node_other <= upper_bound || other_node <= upper_bound);
+            
+            let node = node.id();
+
+            if node_other > upper_bound {
+                debug_assert!(other_node <= upper_bound);                                               
+                change_occured = true;                        
+                graph.fix_disjunction(&other, &node).or(Err(format!("Could not fix disjunction {} -> {}", other.id(), node.id())))?;     
+
+                adjust_head_tail(graph, &other, &node, upper_bound)?;
+                                
+            } else if other_node > upper_bound {
+                debug_assert!(node_other <= upper_bound);
+                change_occured = true;                    
+                graph.fix_disjunction(&node, &other).or(Err(format!("Could not fix disjunction {} -> {}", node.id(), other.id())))?;
+                adjust_head_tail(graph, &node, &other, upper_bound)?;
+
+            }
+        }
+    }
+
+    Ok(change_occured)
 }
 
 
