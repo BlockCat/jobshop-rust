@@ -103,7 +103,7 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
 
     let tis = task_interval::find_task_intervals(resource, graph, upper_bound);
 
-    let starts: Vec<(usize, usize)> = tis.iter()
+    let starts = tis.iter()
         .filter(|ti| ti.nc_start.len() == 1)
         .flat_map(|ti| {
             let id = ti.nc_start[0].id();
@@ -111,9 +111,9 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
                 .filter(|n| graph.has_disjunction(&n.id(), &id))
                 .map(|n| (id, n.id()))
                 .collect_vec()
-        }).collect();
+        });
 
-    let ends: Vec<(usize, usize)> = tis.iter()
+    let ends = tis.iter()
         .filter(|ti| ti.nc_end.len() == 1)
         .flat_map(|ti| {
             let id = ti.nc_end[0].id();
@@ -121,17 +121,20 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
                 .filter(|n| graph.has_disjunction(&n.id(), &id))
                 .map(|n| (n.id(), id))
                 .collect_vec()
-        }).collect();
+        });
 
-    for (other, end) in ends {
-        graph.fix_disjunction(&other, &end).or(Err(format!("Could not fix disjunction {} -> {}", other, end)))?;
+    let fixations = starts.chain(ends).unique().collect_vec();
+
+
+    for (other, end) in fixations {
+        graph.fix_disjunction(&other, &end).or_else(|e| Err(format!("Could not fix disjunction {} -> {}, {:?}", other, end, e)))?;
         adjust_head_tail(graph, &other, &end, upper_bound)?;
     }
-    
+    /*
     for (start, other) in starts {
-        graph.fix_disjunction(&start, &other).or(Err(())).or(Err(format!("Could not fix disjunction {} -> {}", start, other)))?;
+        graph.fix_disjunction(&start, &other).or(Err(())).or_else(|e| Err(format!("Could not fix start disjunction {} -> {}, {:?}", start, other, e)))?;
         adjust_head_tail(graph, &start, &other, upper_bound)?;
-    }
+    }*/
 
 
     Ok(())
@@ -167,7 +170,7 @@ pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &im
     adjust_head_tail(graph, node_1, node_2, upper_bound)?;
 
     if search_orders(graph, upper_bound)? {
-        for resource in 1..=5 {
+        for resource in 1..=10 {
             edge_finding(resource, graph, upper_bound)?;            
         }
     }

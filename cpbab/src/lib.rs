@@ -58,7 +58,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             }
             println!("We got one of length: {}", length);
         } else {
-            if lower_bound(&node, upper_bound, &resources) > upper_bound {
+            if lower_bound(&node, upper_bound, &resources) > upper_bound {                
                 continue;
             }
             //println!("Disjunctions left: {}", node.total_disjunctions());
@@ -66,10 +66,16 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                 debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
                 let mut graph = node.clone();
                 graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                //println!("g: {}", graph);
-                if propagation::propagate_fixation(&mut graph, t1, t2, upper_bound).is_ok() {                    
-                    if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
-                        stack.push_front(graph);
+                
+                let result = propagation::propagate_fixation(&mut graph, t1, t2, upper_bound);
+                match result {
+                    Err(e) => println!("Error: {}", e),
+                    Ok(_) => {
+                        if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
+                            stack.push_front(graph);
+                        } else {
+                            println!("pruned");
+                        }
                     }
                 }
             }

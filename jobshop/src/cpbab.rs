@@ -21,6 +21,6 @@ impl ProblemSolver for CPBAB {
 
         // println!("Found local search: {}", mm);
         
-        cpbab::branch_and_bound(graph, problem.machines as usize, 1000)
+        cpbab::branch_and_bound(graph, problem.machines as usize, 593)
     }
 }
