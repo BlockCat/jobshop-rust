@@ -43,8 +43,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
 
     
     let mut node_evaluations = 0;
-    while !stack.is_empty() {
-        let node = stack.pop_front().unwrap();        
+    while let Some(node) = stack.pop_front() {        
         node_evaluations += 1;
 
         // Check if graph has disjunctions left.
@@ -62,19 +61,24 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                 continue;
             }
             //println!("Disjunctions left: {}", node.total_disjunctions());
-            for (t1, t2) in next_pair(&resources, &node, upper_bound) {
-                debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
-                let mut graph = node.clone();
-                graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
-                
-                let result = propagation::propagate_fixation(&mut graph, t1, t2, upper_bound);
-                match result {
-                    Err(e) => println!("Error: {}", e),
-                    Ok(_) => {
-                        if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
-                            stack.push_front(graph);
-                        } else {
-                            println!("pruned");
+            if let Ok(pairs) = next_pair(&resources, &node, upper_bound) {
+                for (t1, t2) in pairs {
+                    if t1.head() + t1.weight() + t2.weight() + t2.tail() > upper_bound {
+                        continue;
+                    }
+                    debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
+                    let mut graph = node.clone();
+                    graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
+                    
+                    let result = propagation::propagate_fixation(&mut graph, t1, t2, upper_bound);
+                    match result {
+                        Err(e) => println!("Error: {}", e),
+                        Ok(_) => {
+                            if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
+                                stack.push_front(graph);
+                            } else {
+                                println!("pruned");
+                            }
                         }
                     }
                 }
@@ -87,7 +91,7 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
 
 
 
-fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Vec<(&'a node::Node, &'a node::Node)> {
+fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Result<Vec<(&'a node::Node, &'a node::Node)>, String> {
 
     // Calculate the critical task interval for each resource/machine
     // Returns true if machine still has operations that need to be ordered
@@ -97,9 +101,13 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
             .any(|x| graph.node_has_disjunction(x))
     };
     let criticals: Vec<(usize, TaskInterval)> = resources.iter()
-        .filter(resource_filter)
-        .filter_map(|id| crit(*id, graph, upper_bound).map(|x| (*id, x)))
-        .collect();
+        .filter(resource_filter)        
+        .filter_map(|id|            
+            match crit(*id, graph, upper_bound) {
+                Ok(ti) => ti.map(|x| Ok((*id, x))),
+                Err(e) => Some(Err(e))
+            }            
+        ).collect::<Result<Vec<_>, String>>()?;
     
     // Find the resource with the most constrained task interval
     let (resource_id, crit) = criticals.into_iter()
@@ -138,7 +146,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
 
     // infeasible, no pairs found.
     if s1.len() == 0 && s2.len() == 0 {
-        return vec!();
+        return Err(format!("No pairs can be found, infeasible"));
     }
     debug_assert!(s1.len() > 0 || s2.len() > 0);
 
@@ -152,9 +160,9 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
             .expect("Could not minimize h1");
 
         if g(t1, t, upper_bound) <= g(t, t1, upper_bound) {
-            vec!((t1, t), (t, t1))
+            Ok(vec!((t1, t), (t, t1)))
         } else {
-            vec!((t, t1), (t1, t))
+            Ok(vec!((t, t1), (t1, t)))
         }
     } else {
         let delta = t2.lct(upper_bound) - crit.nodes.iter()
@@ -165,9 +173,9 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
             .expect("Could not minimize h2");
 
         if g(t, t2, upper_bound) <= g(t2, t, upper_bound) {
-            vec!((t, t2), (t2, t))
+            Ok(vec!((t, t2), (t2, t)))
         } else {
-            vec!((t2, t), (t, t2))
+            Ok(vec!((t2, t), (t, t2)))
         }
     }
 }
@@ -175,17 +183,17 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
 
 /// Find the critical on a resource, if there is no found then there inconsistency
 /// It can happen that a resource is already completely scheduled.
-fn crit<'a>(resource_id: usize, graph: &'a CGraph, upper_bound: u32) -> Option<TaskInterval<'a>> {
+fn crit<'a>(resource_id: usize, graph: &'a CGraph, upper_bound: u32) -> Result<Option<TaskInterval<'a>>, String> {
     
     // Get the nodes on the resources
     
-    let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph, upper_bound);
+    let task_intervals = task_interval::find_task_intervals(resource_id as u32, graph, upper_bound)?;
     
     debug_assert!(task_intervals.len() > 0);
 
     // Only resources are considered that have more than 1 node anyway.
-    task_intervals.into_iter()        
-        .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32)
+    Ok(task_intervals.into_iter()        
+        .min_by_key(|x| x.slack() as u32 * num_choices(x) as u32))
 }
 
 /// Calculate the slack for all operations on a resource

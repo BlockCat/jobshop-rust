@@ -101,7 +101,7 @@ pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
 
 pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, upper_bound: u32) -> Result<(), String> where I::Node: ConstrainedNode + std::fmt::Debug {
 
-    let tis = task_interval::find_task_intervals(resource, graph, upper_bound);
+    let tis = task_interval::find_task_intervals(resource, graph, upper_bound)?;
 
     let starts = tis.iter()
         .filter(|ti| ti.nc_start.len() == 1)
@@ -125,17 +125,10 @@ pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, up
 
     let fixations = starts.chain(ends).unique().collect_vec();
 
-
     for (other, end) in fixations {
         graph.fix_disjunction(&other, &end).or_else(|e| Err(format!("Could not fix disjunction {} -> {}, {:?}", other, end, e)))?;
         adjust_head_tail(graph, &other, &end, upper_bound)?;
     }
-    /*
-    for (start, other) in starts {
-        graph.fix_disjunction(&start, &other).or(Err(())).or_else(|e| Err(format!("Could not fix start disjunction {} -> {}, {:?}", start, other, e)))?;
-        adjust_head_tail(graph, &start, &other, upper_bound)?;
-    }*/
-
 
     Ok(())
 }

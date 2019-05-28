@@ -192,17 +192,17 @@ impl<T: ConstrainedNode + Clone> std::fmt::Debug for LinkedGraph<T> {
         }
         write!(f, "successors:\n")?;
         for node in self.nodes() {
-            write!(f, "{} -> {:?}\n", node.id(), self.successors(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+            write!(f, "{} -> {:?}\n", node.id(), self.successors(&node.id()).map(|x| x.id()).collect::<Vec<_>>())?;
         }
 
-        write!(f, "predecessor:\n").unwrap();
+        write!(f, "predecessor:\n")?;
         for node in self.nodes() {
-            write!(f, "{} -> {:?}\n", node.id(), self.predecessors(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+            write!(f, "{} -> {:?}\n", node.id(), self.predecessors(&node.id()).map(|x| x.id()).collect::<Vec<_>>())?;
         }
 
-        write!(f, "disjunction:\n").unwrap();
+        write!(f, "disjunction:\n")?;
         for node in self.nodes() {
-            write!(f, "{} -> {:?}\n", node.id(), self.disjunctions(&node.id()).map(|x| x.id()).collect::<Vec<_>>()).unwrap();
+            write!(f, "{} -> {:?}\n", node.id(), self.disjunctions(&node.id()).map(|x| x.id()).collect::<Vec<_>>())?;
         }
 
         write!(f, "")

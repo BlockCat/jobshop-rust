@@ -36,7 +36,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
     pub fn upper(&self) -> u32 { self.upper.lct(self.upper_bound) }
     pub fn lower(&self) -> u32 { self.lower.head() }
 
-    pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &'b T::Node, upper: &'b T::Node, upper_bound: u32) -> Option<TaskInterval<'b, T>> {
+    pub fn from_interval<'b>(graph: &T, resource: &[&'b T::Node], lower: &'b T::Node, upper: &'b T::Node, upper_bound: u32) -> Result<Option<TaskInterval<'b, T>>, String> {
 
         // Task intervals should contain operations that have no disjunctions left
         let nodes: Vec<&T::Node> = resource.iter()
@@ -45,7 +45,7 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
 
         // TaskIntervals must have by definition 2 or more nodes.
         if nodes.len() < 2 {
-            return None;
+            return Ok(None);
         }
 
         let processing = nodes.iter().map(|x| x.weight()).sum();
@@ -66,9 +66,20 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         //     return None;
         // }
 
-        debug_assert!(nc_start.len() >= 1, "An interval can always have a first node:\n{:?}\nstart nodes 1: \n{:?}\nnodes: {:?}\nub: {}", 
+        if nc_start.len() == 0 {
+            return Err(format!("Task interval on resource {} with l: {} u: {} is infeasible, no nodes on start.",
+            lower.machine_id().unwrap(), lower.id(), upper.id()));
+        }
+
+        debug_assert!(nc_start.len() >= 1, "An interval can always have a first node:
+        \n{:?}
+        \nstart nodes 1: \n{:?}
+        \nstart nodes 2: \n{:?}
+        \nnodes: {:?}
+        \nub: {}", 
         graph, 
         nodes.iter().filter(|n| upper_bound >= n.head() + processing + upper.tail()).map(|n| n.id()).collect_vec(), 
+        nodes.iter().filter(|n| !nodes.iter().any(|other| graph.has_precedence(*other, **n))).map(|n| n.id()).collect_vec(),
         nodes.iter().map(|n| n.id()).collect_vec(),
         upper_bound);
        
@@ -84,9 +95,11 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
             .map(|x| *x)
             .collect::<Vec<_>>();
 
-        // if nc_end.len() == 0 {
-        //     return None;
-        // }
+        
+        if nc_end.len() == 0 {
+            return Err(format!("Task interval on resource {} with l: {} u: {} is infeasible, no nodes on end.",
+            lower.machine_id().unwrap(), lower.id(), upper.id()));
+        }
 
 
         debug_assert!(nc_end.len() >= 1, "An interval can always have a last node: \n{:?}\nend nodes: {:?}\nub: {}", 
@@ -99,7 +112,8 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         };
 
         if !ti.feasible() {
-            return None;
+            return Err(format!("Task interval on resource {} with l: {} u: {} is infeasible, negative slack",
+            lower.machine_id().unwrap(), lower.id(), upper.id()));
         }       
         
         
@@ -109,11 +123,11 @@ impl<'a, T: Graph> TaskInterval<'a, T> where T::Node: ConstrainedNode + std::fmt
         debug_assert!(ti.nc_end.iter().combinations(2).all(|x| graph.has_disjunction(*x[0], *x[1])),
             "All nodes within nc_end should have disjunctions between each other, {}", ti.nc_start.len());
 
-        Some(ti)
+        Ok(Some(ti))
     }
 }
 
-pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32) -> Vec<TaskInterval<T>> where T::Node: ConstrainedNode + std::fmt::Debug, T: std::fmt::Debug {
+pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32) -> Result<Vec<TaskInterval<T>>, String> where T::Node: ConstrainedNode + std::fmt::Debug, T: std::fmt::Debug {
     
     let operations = graph.nodes().iter().filter(|x| x.machine_id() == Some(resource)).collect_vec();
     let ests: Vec<&T::Node> = operations.iter().unique_by(|s| s.head()).sorted_by_key(|s| s.head()).cloned().collect_vec();
@@ -134,13 +148,13 @@ pub fn find_task_intervals<T: Graph>(resource: u32, graph: &T, upper_bound: u32)
             let upper = lcts[j];
             debug_assert!(upper_bound > lower.head() + upper.tail());
 
-            if let Some(ti) = TaskInterval::from_interval(graph, &operations, lower, upper, upper_bound) {
+            if let Some(ti) = TaskInterval::from_interval(graph, &operations, lower, upper, upper_bound)? {
                 task_intervals.push(ti);
             }
         }
     }
     
-    task_intervals
+    Ok(task_intervals)
 }
 
 /*
