@@ -162,7 +162,7 @@ pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &im
     
     adjust_head_tail(graph, node_1, node_2, upper_bound)?;
 
-    if search_orders(graph, upper_bound)? {
+    while search_orders(graph, upper_bound)? {
         for resource in 1..=10 {
             edge_finding(resource, graph, upper_bound)?;            
         }

@@ -48,7 +48,7 @@ mod tests {
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
         schedule.pretty_print();
-        assert_eq!(593, l.critical_length().unwrap());
+        assert_eq!(589, l.critical_length().unwrap());
     }
 
     /*#[bench]

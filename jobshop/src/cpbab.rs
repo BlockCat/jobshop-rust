@@ -14,13 +14,18 @@ impl ProblemSolver for CPBAB {
     type Solution = cpbab::CGraph;
 
     fn solve(&self, problem: &Problem) -> Self::Solution {
-        /*let mm = crate::local_search::LocalSearch::new(500)
+        let mm = crate::local_search::LocalSearch::new(5000)
             .solve(problem)
-            .critical_length().unwrap();*/
+            .critical_length().unwrap();
         let graph = problem.into_graph();
 
-        // println!("Found local search: {}", mm);
+        println!("Found local search: {}", mm);
         
-        cpbab::branch_and_bound(graph, problem.machines as usize, 593)
+        let solution = cpbab::branch_and_bound(graph, problem.machines as usize, 578);//found 579;
+
+        println!("dbg: {:?}", solution);
+        
+        solution
+
     }
 }

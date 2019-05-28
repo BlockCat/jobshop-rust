@@ -51,11 +51,13 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             // We are a complete schedule!
             
             let length = dbg!(node.critical_length().expect("Could not calculate critical length"));
+            let lb = lower_bound(&node, upper_bound, &resources);
             if length <= upper_bound {
                 upper_bound = length;
                 current_best = node;
             }
-            println!("We got one of length: {}", length);
+
+            println!("We got one of length: {} or is it {}?", length, lb);
         } else {
             if lower_bound(&node, upper_bound, &resources) > upper_bound {                
                 continue;
@@ -72,12 +74,10 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                     
                     let result = propagation::propagate_fixation(&mut graph, t1, t2, upper_bound);
                     match result {
-                        Err(e) => println!("Error: {}", e),
-                        Ok(_) => {
+                        Err(_) => (),//println!("Error: {}", e),
+                        Ok(_) => {                            
                             if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
-                                stack.push_front(graph);
-                            } else {
-                                println!("pruned");
+                                stack.push_front(graph);                            
                             }
                         }
                     }
