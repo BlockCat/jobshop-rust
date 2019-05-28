@@ -142,8 +142,8 @@ fn adjust_head_tail<I: Graph>(graph: &mut I, node_1: &impl NodeId, node_2: &impl
     let node_2 = node_2.id();
     let old_tail = graph[node_1].tail();
     let old_head = graph[node_2].head();
-    let new_tail = std::cmp::max(graph[node_2].tail() + graph[node_2].weight(), old_tail + graph[node_2].weight());
-    let new_head = std::cmp::max(graph[node_1].head() + graph[node_1].weight(), old_head + graph[node_1].weight());
+    let new_tail = std::cmp::max(graph[node_2].tail() + graph[node_2].weight(), old_tail);
+    let new_head = std::cmp::max(graph[node_1].head() + graph[node_1].weight(), old_head);
 
     if new_tail > old_tail {
         graph[node_1].set_tail(new_tail);
@@ -166,11 +166,11 @@ pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &im
     
     adjust_head_tail(graph, node_1, node_2, upper_bound)?;
 
-    /*if search_orders(graph, upper_bound)? {
+    if search_orders(graph, upper_bound)? {
         for resource in 1..=5 {
             edge_finding(resource, graph, upper_bound)?;            
         }
-    }*/
+    }
 
     debug_assert!(graph.nodes().iter().all(|node|{
             let current_head = node.head();
@@ -188,7 +188,7 @@ pub fn propagate_fixation<I: Graph + std::fmt::Debug>(graph: &mut I, node_1: &im
 }
 
 
-pub fn search_orders<T: Graph> (graph: &mut T, upper_bound: u32) -> Result<bool, String> where T::Node: ConstrainedNode {
+pub fn search_orders<T: Graph + std::fmt::Debug> (graph: &mut T, upper_bound: u32) -> Result<bool, String> where T::Node: ConstrainedNode {
     
     let mut change_occured = false;
     for node in graph.nodes().iter().map(|n| n.id()).collect::<Vec<_>>() {
@@ -199,27 +199,25 @@ pub fn search_orders<T: Graph> (graph: &mut T, upper_bound: u32) -> Result<bool,
             let other_node = graph[other].head() + processing + graph[node].tail();
             
             // If node -> other is bigger than the upper bound
-            if node_other > upper_bound && other_node > upper_bound {
-                println!("yep: {} > {} and {} > {}", node_other, upper_bound, other_node, upper_bound);
-                return Err(format!("yep: {} > {} and {} > {}", node_other, upper_bound, other_node, upper_bound));
+            if node_other > upper_bound && other_node > upper_bound {                
+                return Err(format!("Infeasible, nodes {} and {} can't be ordered {} > {} and {} > {}", node, other, node_other, upper_bound, other_node, upper_bound));
             }
             debug_assert!(node_other <= upper_bound || other_node <= upper_bound);
             
             let node = node.id();
 
             if node_other > upper_bound {
+                
                 debug_assert!(other_node <= upper_bound);                                               
                 change_occured = true;                        
                 graph.fix_disjunction(&other, &node).or(Err(format!("Could not fix disjunction {} -> {}", other.id(), node.id())))?;     
-
                 adjust_head_tail(graph, &other, &node, upper_bound)?;
                                 
-            } else if other_node > upper_bound {
+            } else if other_node > upper_bound {                
                 debug_assert!(node_other <= upper_bound);
-                change_occured = true;                    
+                change_occured = true;
                 graph.fix_disjunction(&node, &other).or(Err(format!("Could not fix disjunction {} -> {}", node.id(), other.id())))?;
                 adjust_head_tail(graph, &node, &other, upper_bound)?;
-
             }
         }
     }

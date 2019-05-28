@@ -58,9 +58,10 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
             }
             println!("We got one of length: {}", length);
         } else {
-            if dbg!(lower_bound(&node, upper_bound, &resources)) > upper_bound {
+            if lower_bound(&node, upper_bound, &resources) > upper_bound {
                 continue;
             }
+            //println!("Disjunctions left: {}", node.total_disjunctions());
             for (t1, t2) in next_pair(&resources, &node, upper_bound) {
                 debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
                 let mut graph = node.clone();
@@ -130,7 +131,7 @@ fn next_pair<'a>(resources: &[usize], graph: &'a CGraph, upper_bound: u32) -> Ve
         .collect_vec();
 
     // infeasible, no pairs found.
-    if dbg!(s1.len() == 0 && s2.len() == 0) {
+    if s1.len() == 0 && s2.len() == 0 {
         return vec!();
     }
     debug_assert!(s1.len() > 0 || s2.len() > 0);

@@ -179,7 +179,9 @@ impl<T: NodeId + Clone> std::ops::IndexMut<usize> for LinkedGraph<T> {
 
 
 impl <T: NodeId + Clone> LinkedGraph<T> {
-    
+    pub fn total_disjunctions(&self) -> usize {
+        self.disjunctions.iter().map(|n| n.len()).sum()
+    }
 }
 
 impl<T: ConstrainedNode + Clone> std::fmt::Debug for LinkedGraph<T> {
