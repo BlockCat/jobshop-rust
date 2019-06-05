@@ -70,12 +70,22 @@ pub fn branch_and_bound(mut root: CGraph, resources: usize, max_makespan: u32) -
                     }
                     debug_assert!(t1.head() + t1.weight() + t2.weight() + t2.tail() <= upper_bound);
                     let mut graph = node.clone();
+
+
+                    println!("Total slack before: {}", graph.nodes().iter().map(|n| {
+                        upper_bound - n.head() - n.weight() - n.tail()
+                    }).sum::<u32>());
+
                     graph.fix_disjunction(t1, t2).expect("Could not fix disjunction");
                     
                     let result = propagation::propagate_fixation(&mut graph, t1, t2, upper_bound);
                     match result {
                         Err(_) => (),//println!("Error: {}", e),
-                        Ok(_) => {                            
+                        Ok(_) => {
+
+                            println!("Total slack after: {}", graph.nodes().iter().map(|n| {
+                                upper_bound - n.head() - n.weight() - n.tail()
+                            }).sum::<u32>());
                             if lower_bound(&graph, max_makespan, &resources) <= upper_bound {
                                 stack.push_front(graph);                            
                             }

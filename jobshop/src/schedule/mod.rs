@@ -1,6 +1,7 @@
 use crate::problem::{ Activity, Problem };
 
 use disjunctgraph::{Graph, NodeId, GraphNode };
+use itertools::Itertools;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScheduledActivity {
@@ -26,9 +27,31 @@ impl Schedule {
 
     pub fn pretty_print(&self) {
         for (id, job) in self.jobs.iter().enumerate() {
-            print!("job {}: ", id);
+            print!("job {}: ", id);            
+            debug_assert!(
+                job.iter().map(|i| &self.activities[*i]).tuple_windows().all(|(a, b)| {
+                    b.starting_time >= a.starting_time + a.activity.process_time
+                })
+            );
             for activity in job {
                 let act = &self.activities[*activity];
+                print!("({}, {})", act.starting_time, act.starting_time + act.activity.process_time);
+            }
+            println!();
+        }
+        let lookup = self.activities.iter().map(|activity| {
+            (activity.activity.machine_id as usize, activity)
+        }).into_group_map();
+        println!("Machines");
+        for i in 1..=lookup.len() {
+            print!("machine {}: ", i);
+            let machine = lookup[&i].iter().sorted_by_key(|a| a.starting_time).collect_vec();
+            debug_assert!(
+                machine.iter().tuple_windows().all(|(a, b)| {
+                    b.starting_time >= a.starting_time + a.activity.process_time
+                })
+            );
+            for act in machine {
                 print!("({}, {})", act.starting_time, act.starting_time + act.activity.process_time);
             }
             println!();

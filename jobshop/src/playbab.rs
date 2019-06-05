@@ -3,15 +3,15 @@ use disjunctgraph::Graph;
 
 // In the case of a search, it might be nice to only store partial orientations.
 // As described in https://pure.tue.nl/ws/files/2119953/385216.pdf
-pub struct CPBAB;
+pub struct PlayBAB;
 
-impl CPBAB {
+impl PlayBAB {
     pub fn new() -> Self {
-        CPBAB {}
+        PlayBAB {}
     }
 }
-impl ProblemSolver for CPBAB {
-    type Solution = cpbab::CGraph;
+impl ProblemSolver for PlayBAB {
+    type Solution = playbab::CGraph;
 
     fn solve(&self, problem: &Problem) -> Self::Solution {
         let mm = crate::local_search::LocalSearch::new(5000)
@@ -21,10 +21,10 @@ impl ProblemSolver for CPBAB {
 
         println!("Found local search: {}", mm);
         
-        let solution = cpbab::branch_and_bound(graph, problem.machines as usize, 578);//found 579; // found 573
+        let solution = playbab::branch_and_bound(graph, problem.machines as usize, 609);//found 579;
 
-        println!("dbg: {:?}", solution);
-
+        //println!("dbg: {:?}", solution);
+        
         solution
 
     }
@@ -33,15 +33,14 @@ impl ProblemSolver for CPBAB {
 
 #[cfg(test)]
 mod tests {    
-    use crate::cpbab::CPBAB;
+    use crate::playbab::PlayBAB;
     use crate::problem::{ Problem, ProblemSolver };
-    use test::Bencher;
 
     #[test]
-    fn test_cpbab_1() {
+    fn test_playbab_1() {
         use disjunctgraph::Graph;
         let problem = debug_problem();
-        let l = CPBAB::new().solve(&problem);
+        let l = PlayBAB::new().solve(&problem);
 
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
@@ -51,10 +50,10 @@ mod tests {
 
 
     #[test]
-    fn test_cpbab_2() {
+    fn test_playbab_2() {
         use disjunctgraph::Graph;
         let problem = small_problem();
-        let l = CPBAB::new().solve(&problem);
+        let l = PlayBAB::new().solve(&problem);
 
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
@@ -63,15 +62,15 @@ mod tests {
     }
     
     #[test]
-    fn test_cpbab_3() {
+    fn test_playbab_3() {
         use disjunctgraph::Graph;
         let problem = big_problem();
-        let l = CPBAB::new().solve(&problem);
+        let l = PlayBAB::new().solve(&problem);
 
         let schedule = crate::schedule::Schedule::from_graph(problem, l.clone());        
         println!("Completed: {}", !l.has_disjunctions());
         schedule.pretty_print();
-        assert_eq!(589, l.critical_length().unwrap());
+        assert_eq!(537, l.critical_length().unwrap());
     }
 
     /*#[bench]

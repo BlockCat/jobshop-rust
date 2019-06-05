@@ -7,7 +7,9 @@ edition = "2018"
 [dependencies]
 dot = "0.1.4"
 rand = "0.6.5"
-hashbrown = "0.3"
+hashbrown = "0.4"
 itertools = "0.8.0"
 disjunctgraph = { path = "../disjunctgraph" }
 cpbab = { path = "../cpbab" }
+playbab = { path = "../playbab" }
+z3solver = { path = "../z3solver" }

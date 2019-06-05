@@ -1,5 +1,5 @@
 [workspace]
-members = ["disjunctgraph", "jobshop", "cpbab"]
+members = ["disjunctgraph", "jobshop", "cpbab", "playbab", "z3solver"]
 
 [profile.release]
 debug = true
