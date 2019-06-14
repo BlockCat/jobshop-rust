@@ -102,6 +102,8 @@ pub fn propagate_head<I: Graph>(node: &impl NodeId, graph: &mut I, upper_bound: 
 pub fn edge_finding<I: Graph + std::fmt::Debug>(resource: u32, graph: &mut I, upper_bound: u32) -> Result<(), String> where I::Node: ConstrainedNode + std::fmt::Debug {
 
     let tis = task_interval::find_task_intervals(resource, graph, upper_bound)?;
+    
+    unimplemented!("Adjust nodes that cannot be last or first");
 
     let starts = tis.iter()
         .filter(|ti| ti.nc_start.len() == 1)
